@@ -1,0 +1,89 @@
+# =====================================================================
+#  Market & Macro Digest — configuration (100% free, runs off-machine)
+#  Secrets (API keys, passwords) come from environment variables / GitHub
+#  Actions secrets — never this file. See README.md.
+# =====================================================================
+
+watchlist:
+  stocks:
+    - ticker: NVDA
+      name: Nvidia
+      # weight: 15          # optional: % of portfolio, for the look-through panel.
+      #                     # Add to every holding for real allocation; omit all for equal-weight.
+      # peers: [AMD, AVGO]  # optional; auto-filled from Finnhub if omitted
+    - ticker: AAPL
+      name: Apple
+    # ETFs are fully supported (deep fund analysis). List peer ETFs to compare
+    # against; the benchmark for relative performance + beta is etf_benchmark below.
+    - ticker: VOO
+      name: Vanguard S&P 500 ETF
+      peers: [SPY, IVV]
+    - ticker: QQQ
+      name: Invesco QQQ
+      peers: [QQQM, VGT]
+  topics:
+    - "semiconductor industry"
+    - "S&P 500 stock market"
+    - "US inflation and interest rates"
+
+# Benchmark for ETF relative-performance + beta.
+etf_benchmark: SPY
+
+# Shariah screen: when true, "stocks to watch" are filtered to Shariah-compliant
+# names (automated business-activity + debt/cash screen — verify with a certified
+# service like Zoya/Musaffa before acting). Set false to disable.
+shariah_only: true
+
+# Crypto highlight in the Market Digest US — MAJOR coins only. Set [] to disable.
+crypto_watch: [BTC, ETH, SOL, XRP, BNB]
+
+# Global market flags shown at the top (oil, gold, dollar, indices, yields).
+# Omit this key to use the sensible defaults; set to [] to hide the section;
+# or customise, e.g.  market_flags: [{name: Brent, symbol: "BZ=F"}, {name: Gold, symbol: "GC=F"}]
+
+sources:
+  google_news: true
+  yahoo_finance: false          # OFF: yfinance .news returns generic market items, not
+                              # ticker-specific — Finnhub + Google News cover it with relevance
+  finnhub: true               # company news w/ real article links (key: FINNHUB_API_KEY)
+  social: true                # crowd sentiment via ADANOS (Reddit; set ADANOS_API_KEY,
+                              # free 250/mo) for bullish/bearish %% + buzz. Falls back to
+                              # keyless ApeWisdom (buzz only) if no key.
+  macro_feeds: true
+  extra_rss:
+    - "https://feeds.marketwatch.com/marketwatch/topstories/"
+  fetch_full_articles: true   # read the FULL article (not just headline) for up to 3
+                              # items/group; follows Finnhub links to the real publisher
+  relevance_filter: true      # drop generic market-roundup items that don't actually
+                              # discuss the ticker (reduces noise)
+  adanos_platforms: [reddit, x, news, polymarket]  # crowd sentiment sources (Adanos)
+  max_items_per_query: 8
+  lookback_hours: 24
+
+analysis:
+  enabled: true
+  debate: true               # 3-layer bull/bear/judge verdict on selected names
+  debate_scope: all          # watch | holdings | all
+  debate_max: 8              # cap debated names/run (free-tier safety)
+  debate_providers: {bull: groq, bear: openrouter, judge: gemini}
+  provider: gemini            # gemini | groq | openrouter  (all free tiers)
+  model: gemini-2.5-flash
+  fallbacks: [groq, openrouter]   # tried in order if the primary fails/rate-limits;
+                                  # if all fail, the free local heuristic runs.
+                                  # The report header always states what actually ran.
+
+# Weekly sector deep-dive runs on this weekday (news scraped over the past 7 days).
+# Keep it a weekday if your schedule only runs Mon–Fri.
+weekly_sector_day: Thu   # Thu UTC = Friday morning HK time (see README)
+
+delivery:
+  method: email               # email | telegram | both | none
+  email:
+    smtp_host: smtp.gmail.com
+    smtp_port: 587
+    from_addr: "you@gmail.com"
+    to_addr: "you@gmail.com"
+  telegram:
+    enabled: false
+
+output_dir: "./digests"
