@@ -6,25 +6,29 @@
 
 watchlist:
   stocks:
-    - ticker: NVDA
-      name: Nvidia
+    - ticker: LLY
+      name: Eli Lilly
       # weight: 15          # optional: % of portfolio, for the look-through panel.
       #                     # Add to every holding for real allocation; omit all for equal-weight.
       # peers: [AMD, AVGO]  # optional; auto-filled from Finnhub if omitted
-    - ticker: AAPL
-      name: Apple
+
     # ETFs are fully supported (deep fund analysis). List peer ETFs to compare
     # against; the benchmark for relative performance + beta is etf_benchmark below.
-    - ticker: VOO
-      name: Vanguard S&P 500 ETF
-      peers: [SPY, IVV]
-    - ticker: QQQ
-      name: Invesco QQQ
-      peers: [QQQM, VGT]
+    - ticker: SPUS
+      name:  SP Funds S&P 500 Sharia Industry Exclusions ETF
+      peers: [VOO]
+    - ticker: HLAL
+      name: Wahed FTSE USA Shariah ETF
+      peers: [SPSK]
+    - ticker: UMMA
+      name: Wahed Dow Jones Islamic World ETF
+      peers: [SPWO]
   topics:
-    - "semiconductor industry"
+    - "Technolofy and semiconductor industry"
     - "S&P 500 stock market"
     - "US inflation and interest rates"
+    - "IPOs"
+    - "gold and safe-haven assets"
 
 # Benchmark for ETF relative-performance + beta.
 etf_benchmark: SPY
@@ -81,8 +85,8 @@ delivery:
   email:
     smtp_host: smtp.gmail.com
     smtp_port: 587
-    from_addr: "you@gmail.com"
-    to_addr: "you@gmail.com"
+    from_addr: "ranamahmed537@gmail.com"
+    to_addr: "ranamahmed537@gmail.com"
   telegram:
     enabled: false
 
