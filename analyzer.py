@@ -445,7 +445,7 @@ def analyze(items, funds, extras, config):
                 continue
             try:
                 raw = providers.complete(prov, SYSTEM, user, model)
-                data = providers.parse_json(raw)
+                data = providers.normalize_text_fields(providers.parse_json(raw))
                 mdl = model or providers.DEFAULT_MODELS.get(prov)
                 status.update(engine=f"{prov} ({mdl})", ok=True,
                               reason="", attempts=status["attempts"] + [f"{prov}: ok"])

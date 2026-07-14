@@ -505,7 +505,7 @@ def build_portfolio(analysis, items, funds, extras):
     T=[f"PORTFOLIO DIGEST {region} — {today}","",("AI: "+status.get("engine","")) if status.get("ok") else ("AI FAILED — heuristic. "+status.get("reason","")),"",analysis.get("market_overview","")]
     for tk,s in {x.get("ticker"):x for x in analysis.get("stocks", [])}.items():
         T+=_stock_text(tk,s,funds,extras,by_group)
-    return subject,html_body,"\n".join(T)
+    return subject,html_body,"\n".join(str(x) for x in T)
 
 
 # --------------------------------------------------------------------------- #
@@ -631,7 +631,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
     if ws:
         T.append("\nSTOCKS TO WATCH (full analysis):")
         for s in ws: T+=_stock_text(s.get("ticker"),s,funds,extras,by_group)
-    return subject,html_body,"\n".join(T)
+    return subject,html_body,"\n".join(str(x) for x in T)
 
 
 def _stock_text(tk,s,funds,extras,by_group):

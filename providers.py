@@ -143,6 +143,29 @@ def available(provider: str) -> bool:
     return False
 
 
+# Fields the prompts describe as "bullet lines" — models sometimes return them
+# as JSON arrays instead of newline-separated strings. The renderer and the
+# plain-text builder expect strings, so join arrays back into bullet text.
+_TEXT_FIELDS = {"market_overview", "summary", "news_impact", "fundamental_read",
+                "divergence", "crowd_note", "bull", "bear", "rationale", "reason",
+                "why", "note", "move_explainer", "nav_read", "vs_market", "vs_peers",
+                "risks", "holdings_news_impact", "result", "outlook",
+                "management_review", "verdict", "read_across",
+                "what_would_change_it", "start_here"}
+
+
+def normalize_text_fields(obj):
+    """Coerce list-valued free-text fields to newline-joined strings, recursively."""
+    if isinstance(obj, dict):
+        return {k: ("\n".join(str(x) for x in v)
+                    if (k in _TEXT_FIELDS and isinstance(v, list))
+                    else normalize_text_fields(v))
+                for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [normalize_text_fields(x) for x in obj]
+    return obj
+
+
 def parse_json(text: str) -> dict:
     """Robustly pull a JSON object out of a model response."""
     text = (text or "").strip()

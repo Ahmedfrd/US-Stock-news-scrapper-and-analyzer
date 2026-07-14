@@ -150,7 +150,7 @@ def run(ticker, name, ctx, config) -> dict | None:
         try:
             raw = providers.complete(prov, _JUDGE_SYS, judge_ctx +
                                      f"\n\nTASK: Judge {ticker} and return the JSON.")
-            verdict = providers.parse_json(raw)
+            verdict = providers.normalize_text_fields(providers.parse_json(raw))
             break
         except Exception as e:  # noqa: BLE001
             print(f"[debate] judge for {ticker} via {prov} failed: {e}", flush=True)
