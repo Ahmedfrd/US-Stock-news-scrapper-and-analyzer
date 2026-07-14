@@ -15,6 +15,11 @@ import html
 import datetime as dt
 from collections import defaultdict
 
+def _esc(x):
+    """html.escape that tolerates non-strings (the AI occasionally returns a
+    bare number where a text bullet was asked for)."""
+    return html.escape(str(x)) if x is not None else ""
+
 _SENT = {"bullish":("#0a7d33","#e6f6ec"),"bearish":("#b3261e","#fdeceb"),
          "neutral":("#5f6368","#eef0f2"),"mixed":("#8a6d00","#fdf5e0"),
          "positive":("#0a7d33","#e6f6ec"),"negative":("#b3261e","#fdeceb"),"n/a":("#9aa0a6","#f1f3f4")}
@@ -25,7 +30,7 @@ _CALL = {"buy":("#0a7d33","#e6f6ec"),"accumulate":("#0a7d33","#eef7f0"),"hold":(
 def _pill(t,fg,bg,big=False):
     fs="14px" if big else "13px"; pad="4px 12px" if big else "3px 9px"
     return (f'<span style="background:{bg};color:{fg};font-size:{fs};font-weight:700;padding:{pad};'
-            f'border-radius:11px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">{html.escape(str(t))}</span>')
+            f'border-radius:11px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">{_esc(str(t))}</span>')
 def _sent_pill(s): fg,bg=_SENT.get((s or "neutral").lower(),_SENT["neutral"]); return _pill(s or "neutral",fg,bg)
 def _impact_pill(s): fg,bg=_IMPACT.get((s or "low").lower(),_IMPACT["low"]); return _pill(f"impact {s or 'low'}",fg,bg)
 def _call_pill(c): fg,bg=_CALL.get((c or "hold").lower(),_CALL["hold"]); return _pill(c or "hold",fg,bg,big=True)
@@ -63,7 +68,7 @@ def _bar(label,val):
             f'<span style="font-size:14px;color:#3c4043;width:30px;text-align:right;font-weight:600">{val:.0f}</span></div>')
 
 def _grid(rows):
-    cells="".join(f'<tr><td style="padding:3px 12px 3px 0;color:#5f6368;font-size:15px;white-space:nowrap;vertical-align:top">{html.escape(l)}</td>'
+    cells="".join(f'<tr><td style="padding:3px 12px 3px 0;color:#5f6368;font-size:15px;white-space:nowrap;vertical-align:top">{_esc(l)}</td>'
                   f'<td style="padding:3px 0;font-size:15px;color:#1a1a1a">{v}</td></tr>' for l,v in rows)
     return f'<table style="border-collapse:collapse;width:100%">{cells}</table>'
 
@@ -79,14 +84,14 @@ def _prose(text, fs="15px", color="#3c4043"):
     lines=[l for l in lines if l]
     if not lines: return ""
     if len(lines)==1:
-        return f'<div style="font-size:{fs};color:{color};margin:4px 0">{html.escape(lines[0])}</div>'
-    return "".join(f'<div style="font-size:{fs};color:{color};margin:4px 0 4px 4px">• {html.escape(l)}</div>'
+        return f'<div style="font-size:{fs};color:{color};margin:4px 0">{_esc(lines[0])}</div>'
+    return "".join(f'<div style="font-size:{fs};color:{color};margin:4px 0 4px 4px">• {_esc(l)}</div>'
                    for l in lines)
 
 def _chip(label,value,tone="neutral"):
     c={"good":"#0a7d33","bad":"#b3261e","warn":"#8a6d00","neutral":"#3c4043"}.get(tone,"#3c4043")
     return (f'<span style="display:inline-block;background:#eef1f4;border-radius:7px;padding:4px 9px;'
-            f'margin:3px 5px 3px 0;font-size:14px;color:#5f6368">{html.escape(label)} '
+            f'margin:3px 5px 3px 0;font-size:14px;color:#5f6368">{_esc(label)} '
             f'<b style="color:{c}">{value}</b></span>')
 
 def _crowd_line(cw):
@@ -131,11 +136,11 @@ def _crowd_panel(cw):
         split = (f'<span style="color:#0a7d33">{b}%</span> / {n}% / <span style="color:#b3261e">{br}%</span>'
                  if b is not None else (f'score {sv.get("score")}' if sv.get("score") is not None else "n/a"))
         w = "font-weight:700;" if bold else ""
-        return (f'<tr><td style="padding:3px 8px 3px 0;font-size:14px;{w}">{html.escape(name)}</td>'
+        return (f'<tr><td style="padding:3px 8px 3px 0;font-size:14px;{w}">{_esc(name)}</td>'
                 f'<td style="padding:3px 8px">{_stacked(b, n, br)}</td>'
                 f'<td style="text-align:right;padding:3px 8px;font-size:14px">{split}</td>'
                 f'<td style="text-align:right;padding:3px 8px;font-size:14px">{sv.get("buzz") if sv.get("buzz") is not None else "–"}</td>'
-                f'<td style="text-align:right;padding:3px 0;font-size:14px;color:#5f6368">{html.escape(str(sv.get("trend") or "–"))}</td></tr>')
+                f'<td style="text-align:right;padding:3px 0;font-size:14px;color:#5f6368">{_esc(str(sv.get("trend") or "–"))}</td></tr>')
     for name, sv in cw.get("sources", {}).items():
         rows += row(name, sv)
     if c:
@@ -161,10 +166,10 @@ def _tech_panel(t):
            _chip("Volume",f"{t.vol_ratio}x" if t.vol_ratio is not None else "n/a",vol_tone),
            _chip("Support",t.support if t.support is not None else "n/a"),
            _chip("Resistance",t.resistance if t.resistance is not None else "n/a")]
-    reasons="".join(f'<div style="font-size:14px;color:#5f6368;margin:2px 0">• {html.escape(r)}</div>' for r in (t.reasons or [])[:5])
+    reasons="".join(f'<div style="font-size:14px;color:#5f6368;margin:2px 0">• {_esc(r)}</div>' for r in (t.reasons or [])[:5])
     return (f'<div style="margin:2px 0 6px">{"".join(chips)}</div>'
             f'<div style="font-size:15px;margin-bottom:4px">Rule-based signal: {_sent_pill(t.bias)} '
-            f'&nbsp;<b>{html.escape(t.signal.upper())}</b> <span style="color:#9aa0a6">(deterministic reference)</span></div>{reasons}')
+            f'&nbsp;<b>{_esc(t.signal.upper())}</b> <span style="color:#9aa0a6">(deterministic reference)</span></div>{reasons}')
 
 def _links_block(items,label="Sources & full articles"):
     if not items: return ""
@@ -174,9 +179,9 @@ def _links_block(items,label="Sources & full articles"):
         if not k or k in seen: continue
         seen.add(k); uniq.append(it)
     if not uniq: return ""
-    rows="".join(f'<div style="font-size:15px;margin:4px 0"><a href="{html.escape(it.url)}" '
-                 f'style="color:#1a1a1a;text-decoration:none">• {html.escape(it.title)}</a> '
-                 f'<span style="color:#9aa0a6">— {html.escape(it.source)}</span></div>' for it in uniq)
+    rows="".join(f'<div style="font-size:15px;margin:4px 0"><a href="{_esc(it.url)}" '
+                 f'style="color:#1a1a1a;text-decoration:none">• {_esc(it.title)}</a> '
+                 f'<span style="color:#9aa0a6">— {_esc(it.source)}</span></div>' for it in uniq)
     return (f'<details style="margin-top:8px"><summary style="cursor:pointer;color:#3367d6;font-size:15px;'
             f'font-weight:600;user-select:none">▾ {label} ({len(uniq)}) — click to expand</summary>'
             f'<div style="margin-top:6px;padding-left:4px">{rows}</div></details>')
@@ -185,16 +190,16 @@ def _banner(status):
     if status.get("ok"):
         return (f'<div style="background:#e6f6ec;border-left:4px solid #0a7d33;padding:9px 13px;'
                 f'border-radius:6px;margin-bottom:16px;font-size:15px;color:#0a5227">'
-                f'✅ Analysis by <b>{html.escape(status.get("engine",""))}</b></div>')
-    reason=html.escape(status.get("reason","") or "no AI provider available")
+                f'✅ Analysis by <b>{_esc(status.get("engine",""))}</b></div>')
+    reason=_esc(status.get("reason","") or "no AI provider available")
     return (f'<div style="background:#fdf5e0;border-left:4px solid #8a6d00;padding:9px 13px;border-radius:6px;'
             f'margin-bottom:16px;font-size:15px;color:#6b5300">⚠️ AI unavailable — used the free '
             f'<b>heuristic</b>.<br><span>Reason: {reason}</span></div>')
 
 def _h2(title, sub=""):
-    subhtml=f' <span style="font-size:15px;font-weight:400;color:#9aa0a6">— {html.escape(sub)}</span>' if sub else ""
+    subhtml=f' <span style="font-size:15px;font-weight:400;color:#9aa0a6">— {_esc(sub)}</span>' if sub else ""
     return (f'<h2 style="font-size:19px;margin:26px 0 12px;padding-bottom:6px;border-bottom:2px solid #eef0f2">'
-            f'{html.escape(title)}{subhtml}</h2>')
+            f'{_esc(title)}{subhtml}</h2>')
 
 def _flags_row(flags):
     if not flags: return ""
@@ -203,7 +208,7 @@ def _flags_row(flags):
         pct=fl.get("pct"); col="#0a7d33" if (pct or 0)>=0 else "#b3261e"; arr="▲" if (pct or 0)>=0 else "▼"
         pcts=f'<span style="color:{col};font-weight:600">{arr} {pct:+.2f}%</span>' if pct is not None else ""
         cells+=(f'<td style="padding:8px 12px;border:1px solid #eef0f2;text-align:center">'
-                f'<div style="font-size:14px;color:#5f6368">{html.escape(fl["name"])}</div>'
+                f'<div style="font-size:14px;color:#5f6368">{_esc(fl["name"])}</div>'
                 f'<div style="font-size:16px;font-weight:700">{fl.get("price")}</div>'
                 f'<div style="font-size:14px">{pcts}</div></td>')
     return (f'<div style="margin-bottom:18px">{_h2("Global market flags")}'
@@ -230,7 +235,7 @@ def _wrap(title, dated, banner_html, body):
             '<body style="margin:0;background:#ffffff">'
             f'<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
             f'max-width:740px;margin:0 auto;color:#1a1a1a;line-height:1.55;font-size:16px">'
-            f'<h1 style="font-size:26px;margin:0 0 2px">{html.escape(title)}</h1>'
+            f'<h1 style="font-size:26px;margin:0 0 2px">{_esc(title)}</h1>'
             f'<div style="color:#5f6368;font-size:15px;margin-bottom:12px">{dated}</div>'
             f'{banner_html}{body}')
 
@@ -245,15 +250,15 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     price=_num(f.price) if f else "n/a"; chg=_pct_span(f.change_1d) if f else ""
     cur=(getattr(f,"currency","") or "") if f else ""
     if cur and cur!="USD" and price!="n/a":
-        price+=f' <span style="color:#8a6d00;font-size:13px;font-weight:700">{html.escape(cur)}</span>'
+        price+=f' <span style="color:#8a6d00;font-size:13px;font-weight:700">{_esc(cur)}</span>'
     H=[]
     H.append(f'<div style="border:1px solid #e5e7eb;border-radius:10px;padding:16px 18px;margin-bottom:16px;background:#fff">')
     H.append(f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">'
-             f'<span style="font-size:20px;font-weight:800">{html.escape(tk)}'
-             f'<span style="font-weight:400;color:#5f6368;font-size:16px"> {html.escape(f.name if f else "")}</span></span>'
+             f'<span style="font-size:20px;font-weight:800">{_esc(tk)}'
+             f'<span style="font-weight:400;color:#5f6368;font-size:16px"> {_esc(f.name if f else "")}</span></span>'
              f'<span>{_impact_pill(s.get("impact"))}&nbsp;{_sent_pill(s.get("sentiment"))}</span></div>')
     if watch_reason:
-        H.append(f'<div style="font-size:14px;color:#8a6d00;margin-top:2px">Flagged because: {html.escape(watch_reason)}</div>')
+        H.append(f'<div style="font-size:14px;color:#8a6d00;margin-top:2px">Flagged because: {_esc(watch_reason)}</div>')
     sh = (extras.get("shariah") or {}).get(tk)
     if sh:
         col = {"pass":("#0a7d33","#e6f6ec"),"review":("#8a6d00","#fdf5e0"),"fail":("#b3261e","#fdeceb")}.get(sh["status"],("#5f6368","#eef0f2"))
@@ -293,23 +298,23 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
         left=_grid([("Returns",f"1d {_num(r.get('1d'),'%')} · 1w {_num(r.get('1w'),'%')} · 1m {_num(r.get('1m'),'%')} · 3m {_num(r.get('3m'),'%')}"),
                     ("",f"6m {_num(r.get('6m'),'%')} · YTD {_num(r.get('ytd'),'%')} · 1y {_num(r.get('1y'),'%')}"),
                     ("Risk",(f"vol {_num(prof.vol_1y,'%',nd=1)} · maxDD {_num(prof.max_drawdown_1y,'%',nd=1)} · beta {prof.beta if prof and prof.beta is not None else 'n/a'}") if prof else "n/a")])
-        right=_grid([("Category",html.escape((prof.category if prof else f.category) or "n/a")),("AUM",_money(prof.aum if prof else f.aum)),
+        right=_grid([("Category",_esc((prof.category if prof else f.category) or "n/a")),("AUM",_money(prof.aum if prof else f.aum)),
                      ("Expense",_expense(prof.expense_ratio if prof else None)),("Yield",_num(prof.etf_yield if prof else f.etf_yield,pct=True)),
                      ("NAV prem/disc",_num(prof.premium_discount if prof else None,"%")),("Top-10 wt",_num(prof.top10_weight if prof else None,"%",nd=1))])
         H.append(_box(f'<div style="display:flex;gap:20px;flex-wrap:wrap"><div style="flex:1;min-width:250px">{left}</div><div style="flex:1;min-width:230px">{right}</div></div>'))
         if prof and prof.rel_market and not prof.tracks_benchmark:
             rel=" · ".join(f"{k} {v:+.1f}" for k,v in prof.rel_market.items())
-            H.append(f'<div style="font-size:15px;color:#3c4043;margin:2px 0 6px"><b>vs {html.escape(prof.benchmark)} (% pts):</b> {rel}</div>')
+            H.append(f'<div style="font-size:15px;color:#3c4043;margin:2px 0 6px"><b>vs {_esc(prof.benchmark)} (% pts):</b> {rel}</div>')
         elif prof and prof.tracks_benchmark:
-            H.append(f'<div style="font-size:14px;color:#9aa0a6;margin:2px 0 6px">Tracks the {html.escape(prof.benchmark)} benchmark (relative performance ≈ 0).</div>')
+            H.append(f'<div style="font-size:14px;color:#9aa0a6;margin:2px 0 6px">Tracks the {_esc(prof.benchmark)} benchmark (relative performance ≈ 0).</div>')
         if prof and prof.holdings:
             rows=('<tr style="color:#5f6368;font-size:14px"><td style="padding:3px 8px 3px 0">Holding</td>'
                   '<td style="text-align:right;padding:3px 8px">Weight</td><td style="text-align:right;padding:3px 8px">1d</td>'
                   '<td style="text-align:right;padding:3px 0">Contribution</td></tr>')
             for h in prof.holdings[:8]:
                 cc=h.contribution; ccol="#0a7d33" if (cc or 0)>0 else "#b3261e" if (cc or 0)<0 else "#5f6368"
-                rows+=(f'<tr><td style="padding:3px 8px 3px 0;font-size:15px">{html.escape(h.symbol)} '
-                       f'<span style="color:#9aa0a6">{html.escape((h.name or "")[:20])}</span></td>'
+                rows+=(f'<tr><td style="padding:3px 8px 3px 0;font-size:15px">{_esc(h.symbol)} '
+                       f'<span style="color:#9aa0a6">{_esc((h.name or "")[:20])}</span></td>'
                        f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_num((h.weight or 0)*100,"%",nd=1)}</td>'
                        f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_num(h.ret_1d,"%")}</td>'
                        f'<td style="text-align:right;padding:3px 0;font-size:15px;color:{ccol}">{("%+.3f"%cc) if cc is not None else "n/a"}</td></tr>')
@@ -320,17 +325,17 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
         sw=(prof.sector_weights if prof else f.sector_weights) or {}
         if sw:
             H.append(f'<div style="font-size:15px;color:#3c4043;margin:4px 0"><b>Sectors:</b> '
-                     + ", ".join(f"{html.escape(k)} {v}%" for k,v in list(sw.items())[:6])+'</div>')
+                     + ", ".join(f"{_esc(k)} {v}%" for k,v in list(sw.items())[:6])+'</div>')
         if prof and prof.peers:
             rows=('<tr style="color:#5f6368;font-size:14px"><td style="padding:3px 8px 3px 0">ETF</td>'
                   '<td style="text-align:right;padding:3px 8px">1y</td><td style="text-align:right;padding:3px 8px">Expense</td>'
                   '<td style="text-align:right;padding:3px 0">AUM</td></tr>')
-            rows+=(f'<tr><td style="padding:3px 8px 3px 0;font-size:15px"><b>{html.escape(tk)} (this)</b></td>'
+            rows+=(f'<tr><td style="padding:3px 8px 3px 0;font-size:15px"><b>{_esc(tk)} (this)</b></td>'
                    f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_num(r.get("1y"),"%")}</td>'
                    f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_expense(prof.expense_ratio)}</td>'
                    f'<td style="text-align:right;padding:3px 0;font-size:15px">{_money(prof.aum)}</td></tr>')
             for pe in prof.peers:
-                rows+=(f'<tr><td style="padding:3px 8px 3px 0;font-size:15px">{html.escape(pe.ticker)}</td>'
+                rows+=(f'<tr><td style="padding:3px 8px 3px 0;font-size:15px">{_esc(pe.ticker)}</td>'
                        f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_num(pe.ret_1y,"%")}</td>'
                        f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_expense(pe.expense)}</td>'
                        f'<td style="text-align:right;padding:3px 0;font-size:15px">{_money(pe.aum)}</td></tr>')
@@ -345,7 +350,7 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
                      ("Profitability",f"net {_num(f.net_margin,pct=True)} · gross {_num(f.gross_margin,pct=True)} · ROE {_num(f.roe,pct=True)}"),
                      ("Momentum",f"1m {_num(f.ret_1m,'%')} · 3m {_num(f.ret_3m,'%')} · 6m {_num(f.ret_6m,'%')}"),
                      ("Analyst",f"target {_num(f.target_mean)} ({_num(f.implied_upside,'%')} upside)"),
-                     ("Next earnings",(f"{html.escape(f.next_earnings)} ({f.days_to_earnings}d)" if f.next_earnings else "n/a"))])
+                     ("Next earnings",(f"{_esc(f.next_earnings)} ({f.days_to_earnings}d)" if f.next_earnings else "n/a"))])
         H.append(_box(f'<div style="display:flex;gap:20px;flex-wrap:wrap"><div style="flex:1;min-width:240px">{bars}</div><div style="flex:1;min-width:250px">{right}</div></div>'))
 
     H.append(_debate_panel(s))
@@ -363,15 +368,15 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     if s.get("news_impact"):
         H.append(_box(f'<b style="color:#3367d6">News impact on the company:</b>{_prose(s["news_impact"])}',bg="#eef3fb",border="#d5e2f7"))
     if s.get("fundamental_read"):
-        H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">📊 {html.escape(s["fundamental_read"])}</div>')
+        H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">📊 {_esc(s["fundamental_read"])}</div>')
     if s.get("crowd_note"):
-        H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">👥 {html.escape(s["crowd_note"])}</div>')
+        H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">👥 {_esc(s["crowd_note"])}</div>')
 
     ed=s.get("earnings") or {}
     if any(ed.get(k) for k in ("result","outlook","management_review")):
         inner='<div style="font-weight:700;color:#0a7d33;margin-bottom:3px;font-size:15px">Earnings &amp; outlook</div>'
         for k,lab in [("result","Result"),("outlook","Outlook"),("management_review","Management")]:
-            if ed.get(k): inner+=f'<div style="font-size:15px"><b>{lab}:</b> {html.escape(ed[k])}</div>'
+            if ed.get(k): inner+=f'<div style="font-size:15px"><b>{lab}:</b> {_esc(ed[k])}</div>'
         H.append(_box(inner,bg="#f1f7f1",border="#d5ead5"))
 
     etf_an=s.get("etf") or {}
@@ -386,12 +391,12 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
         if all_h: H.append(_links_block(all_h[:10],label="Underlying holdings — news"))
 
     fil=fils.get(tk)
-    if fil: H.append(f'<div style="font-size:15px;margin-bottom:6px">📄 <a href="{html.escape(fil["url"])}" style="color:#3367d6">{html.escape(fil["form"])} filed {html.escape(fil["filed"])}</a></div>')
+    if fil: H.append(f'<div style="font-size:15px;margin-bottom:6px">📄 <a href="{_esc(fil["url"])}" style="color:#3367d6">{_esc(fil["form"])} filed {_esc(fil["filed"])}</a></div>')
     if s.get("divergence"):
-        H.append(_box(f'⚡ <b>Divergence:</b> {html.escape(s["divergence"])}',bg="#fdf5e0",border="#ecdca6"))
+        H.append(_box(f'⚡ <b>Divergence:</b> {_esc(s["divergence"])}',bg="#fdf5e0",border="#ecdca6"))
     if s.get("bull") or s.get("bear"):
-        H.append(f'<div style="font-size:15px;margin-bottom:4px"><span style="color:#0a7d33">▲ Bull:</span> {html.escape(s.get("bull",""))}<br>'
-                 f'<span style="color:#b3261e">▼ Bear:</span> {html.escape(s.get("bear",""))}</div>')
+        H.append(f'<div style="font-size:15px;margin-bottom:4px"><span style="color:#0a7d33">▲ Bull:</span> {_esc(s.get("bull",""))}<br>'
+                 f'<span style="color:#b3261e">▼ Bear:</span> {_esc(s.get("bear",""))}</div>')
 
     tech=(extras.get("technicals") or {}).get(tk)
     H.append(_box('<div style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368;margin-bottom:4px">Technical analysis</div>'+_tech_panel(tech)))
@@ -421,7 +426,7 @@ def _lookthrough_panel(lt):
         return ""
     B=[_h2("Portfolio look-through", "true exposure across your holdings + what your ETFs hold")]
     if lt.get("flags"):
-        fl="".join(f'<div style="font-size:15px;color:#6b5300;margin:2px 0">⚠️ {html.escape(x)}</div>' for x in lt["flags"])
+        fl="".join(f'<div style="font-size:15px;color:#6b5300;margin:2px 0">⚠️ {_esc(x)}</div>' for x in lt["flags"])
         B.append(_box(fl,bg="#fdf9ec",border="#ecdca6"))
     # top companies as bars (scaled to the largest so bars are readable)
     comps=lt["companies"][:12]
@@ -438,7 +443,7 @@ def _lookthrough_panel(lt):
         elif c["direct_pct"]>0:
             detail=' <span style="color:#9aa0a6">(direct)</span>'
         rows+=(f'<div style="display:flex;align-items:center;gap:8px;margin:3px 0">'
-               f'<span style="font-size:15px;width:150px"><b>{html.escape(c["ticker"])}</b>{tag}</span>'
+               f'<span style="font-size:15px;width:150px"><b>{_esc(c["ticker"])}</b>{tag}</span>'
                f'<span style="flex:1;background:#e9ecef;border-radius:5px;height:12px"><span style="display:block;height:12px;border-radius:5px;width:{w}%;background:#3367d6"></span></span>'
                f'<span style="font-size:15px;width:52px;text-align:right;font-weight:700">{c["total_pct"]}%</span>'
                f'<span style="font-size:14px;flex-basis:100%;padding-left:158px;margin-top:-2px">{detail}</span></div>')
@@ -450,7 +455,7 @@ def _lookthrough_panel(lt):
         for s in lt["sectors"][:8]:
             w=max(2,int(s["pct"]/smx*100))
             srows+=(f'<div style="display:flex;align-items:center;gap:8px;margin:3px 0">'
-                    f'<span style="font-size:15px;width:170px">{html.escape(s["sector"])}</span>'
+                    f'<span style="font-size:15px;width:170px">{_esc(s["sector"])}</span>'
                     f'<span style="flex:1;background:#e9ecef;border-radius:5px;height:12px"><span style="display:block;height:12px;border-radius:5px;width:{w}%;background:#0a7d33"></span></span>'
                     f'<span style="font-size:15px;width:46px;text-align:right;font-weight:700">{s["pct"]}%</span></div>')
         B.append(_box('<div style="font-weight:700;font-size:16px;margin-bottom:6px">Sector allocation (look-through)</div>'+srows))
@@ -480,7 +485,7 @@ def build_portfolio(analysis, items, funds, extras):
     B.append(_lookthrough_panel(extras.get("look_through")))
     prio=analysis.get("priority", [])
     if prio:
-        lis="".join(f'<li style="margin:4px 0"><b>{html.escape(p.get("ticker",""))}</b> — {html.escape(p.get("why",""))}</li>' for p in prio[:6])
+        lis="".join(f'<li style="margin:4px 0"><b>{_esc(p.get("ticker",""))}</b> — {_esc(p.get("why",""))}</li>' for p in prio[:6])
         B.append(f'{_h2("What matters today")}<ol style="margin:0;padding-left:20px;font-size:16px">{lis}</ol>')
     B.append(_h2("Your holdings"))
     for tk,s in {x.get("ticker"):x for x in analysis.get("stocks", [])}.items():
@@ -491,9 +496,9 @@ def build_portfolio(analysis, items, funds, extras):
         if macro.get("summary"):
             B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
         for p in (macro.get("points") or [])[:6]:
-            B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {html.escape(p)}</div>')
+            B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {_esc(p)}</div>')
         if macro.get("watch"):
-            B.append('<div style="font-size:15px;color:#5f6368;margin-top:4px">Watch: '+" · ".join(html.escape(w) for w in macro["watch"])+'</div>')
+            B.append('<div style="font-size:15px;color:#5f6368;margin-top:4px">Watch: '+" · ".join(_esc(w) for w in macro["watch"])+'</div>')
     B.append(_legend())
     html_body=_wrap(f"Portfolio Digest {region}",today,_banner(status),"".join(B))+_footer()
     # text
@@ -525,9 +530,9 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
     if sh:
         B.append(_h2("Sector highlights","from today's news flow"))
         for sec in sh:
-            pts="".join(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {html.escape(p)}</div>' for p in (sec.get("points") or [])[:6])
+            pts="".join(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(p)}</div>' for p in (sec.get("points") or [])[:6])
             B.append(_box(f'<div style="display:flex;justify-content:space-between;align-items:center">'
-                          f'<span style="font-weight:700;font-size:17px">{html.escape(sec.get("sector",""))}</span> {_sent_pill(sec.get("call"))}</div>{pts}'))
+                          f'<span style="font-weight:700;font-size:17px">{_esc(sec.get("sector",""))}</span> {_sent_pill(sec.get("call"))}</div>{pts}'))
 
     ws=watch_analysis.get("stocks", []) if watch_analysis else []
     if ws:
@@ -553,7 +558,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
         B.append(_h2("Crypto", "major coins"))
         head = (f'<div style="display:flex;justify-content:space-between;align-items:center">'
                 f'<span style="font-weight:700;font-size:17px">Crypto market</span> {_sent_pill(ch.get("call"))}</div>')
-        pts = "".join(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {html.escape(p)}</div>'
+        pts = "".join(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(p)}</div>'
                       for p in (ch.get("points") or [])[:5])
         rows = ""
         for sym in order[:10]:
@@ -568,13 +573,13 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
             tpanel = ""
             if ctech.get(sym) and not getattr(ctech[sym], "error", None):
                 tpanel = (f'<details style="margin-top:4px"><summary style="cursor:pointer;color:#3367d6;'
-                          f'font-size:14px;font-weight:600;user-select:none">▾ Technicals for {html.escape(sym)}</summary>'
+                          f'font-size:14px;font-weight:600;user-select:none">▾ Technicals for {_esc(sym)}</summary>'
                           f'<div style="margin-top:6px">{_tech_panel(ctech[sym])}</div></details>')
-            rows += (f'<tr><td style="padding:8px 10px 8px 0;font-weight:700;white-space:nowrap;vertical-align:top">{html.escape(sym)}</td>'
+            rows += (f'<tr><td style="padding:8px 10px 8px 0;font-weight:700;white-space:nowrap;vertical-align:top">{_esc(sym)}</td>'
                      f'<td style="padding:8px 10px 8px 0;vertical-align:top">{_call_pill(c.get("call"))}</td>'
                      f'<td style="padding:8px 0;font-size:15px;color:#3c4043">{price}{move}{m7}'
                      f'<span style="color:#9aa0a6;font-size:14px">{crowd_bit}</span>'
-                     f'<br>{html.escape(c.get("rationale") or c.get("reason") or "")}{tpanel}</td></tr>')
+                     f'<br>{_esc(c.get("rationale") or c.get("reason") or "")}{tpanel}</td></tr>')
         cnews = _links_block(by_group.get("Crypto", [])[:8], label="Crypto news")
         B.append(_box(head + pts + (f'<table style="border-collapse:collapse;width:100%;margin-top:6px">{rows}</table>' if rows else "") + cnews))
         B.append('<div style="font-size:14px;color:#9aa0a6;margin-top:-6px">Per-coin call = combined view (price/technicals + crypto news). '
@@ -586,12 +591,12 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
         for t in topics:
             name=t.get("topic","")
             inner=(f'<div style="display:flex;justify-content:space-between;align-items:center">'
-                   f'<span style="font-weight:700;font-size:17px">{html.escape(name)}</span> {_sent_pill(t.get("sentiment"))}</div>'
+                   f'<span style="font-weight:700;font-size:17px">{_esc(name)}</span> {_sent_pill(t.get("sentiment"))}</div>'
                    f'{_prose(t.get("summary",""))}')
             kc=t.get("key_companies") or []
             if kc:
                 inner+='<div style="font-size:15px;margin:4px 0"><b>Key movers (not in your portfolio):</b></div>'
-                for c in kc[:5]: inner+=f'<div style="font-size:15px;margin:2px 0">• <b>{html.escape(c.get("name",""))}</b> — {html.escape(c.get("note",""))}</div>'
+                for c in kc[:5]: inner+=f'<div style="font-size:15px;margin:2px 0">• <b>{_esc(c.get("name",""))}</b> — {_esc(c.get("note",""))}</div>'
             inner+=_links_block(by_group.get(name, [])[:6])
             B.append(_box(inner))
 
@@ -600,9 +605,9 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
         B.append(_h2("Weekly sector deep-dive"))
         for sec in sectors:
             name=sec.get("sector","")
-            inner=f'<div style="font-weight:700;font-size:17px">{html.escape(name)}</div>{_prose(sec.get("summary",""))}'
-            for d in (sec.get("developments") or []): inner+=f'<div style="font-size:15px;margin:2px 0">• {html.escape(d)}</div>'
-            if sec.get("read_across"): inner+=f'<div style="font-size:15px;color:#5f6368;margin-top:4px">Read-across: {html.escape(sec["read_across"])}</div>'
+            inner=f'<div style="font-weight:700;font-size:17px">{_esc(name)}</div>{_prose(sec.get("summary",""))}'
+            for d in (sec.get("developments") or []): inner+=f'<div style="font-size:15px;margin:2px 0">• {_esc(d)}</div>'
+            if sec.get("read_across"): inner+=f'<div style="font-size:15px;color:#5f6368;margin-top:4px">Read-across: {_esc(sec["read_across"])}</div>'
             inner+=_links_block(sec_news.get(name, [])[:5])
             B.append(_box(inner))
 
@@ -611,8 +616,8 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
         B.append(_h2("Macro"))
         if macro.get("summary"): B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
         for p in (macro.get("points") or [])[:6]:
-            B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {html.escape(p)}</div>')
-        if macro.get("watch"): B.append('<div style="font-size:15px;color:#5f6368;margin:6px 0">Watch: '+" · ".join(html.escape(w) for w in macro["watch"])+'</div>')
+            B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {_esc(p)}</div>')
+        if macro.get("watch"): B.append('<div style="font-size:15px;color:#5f6368;margin:6px 0">Watch: '+" · ".join(_esc(w) for w in macro["watch"])+'</div>')
         B.append(_links_block(macro_items[:8]))
     B.append(_legend())
     html_body=_wrap(("Weekly " if weekly else "")+f"Market Digest {region}",today,_banner(status),"".join(B))+_footer()
@@ -662,12 +667,12 @@ def _debate_panel(s):
         return ""
     conv = (v.get("conviction") or "").lower()
     conv_col = {"high": "#0a7d33", "medium": "#8a6d00", "low": "#9aa0a6"}.get(conv, "#5f6368")
-    risks = "".join(f'<li style="margin:2px 0">{html.escape(r)}</li>' for r in (v.get("key_risks") or [])[:3])
+    risks = "".join(f'<li style="margin:2px 0">{_esc(r)}</li>' for r in (v.get("key_risks") or [])[:3])
     extra = ""
     if v.get("start_here"):
-        extra += f'<div style="font-size:14px;margin-top:6px"><b>Start here:</b> {html.escape(v["start_here"])}</div>'
+        extra += f'<div style="font-size:14px;margin-top:6px"><b>Start here:</b> {_esc(v["start_here"])}</div>'
     if v.get("what_would_change_it"):
-        extra += f'<div style="font-size:14px;color:#5f6368;margin-top:3px"><b>Would change the call:</b> {html.escape(v["what_would_change_it"])}</div>'
+        extra += f'<div style="font-size:14px;color:#5f6368;margin-top:3px"><b>Would change the call:</b> {_esc(v["what_would_change_it"])}</div>'
     bull = _prose(d.get("bull", ""), fs="14px", color="#1a1a1a")
     bear = _prose(d.get("bear", ""), fs="14px", color="#1a1a1a")
     roles = d.get("roles", {})
@@ -680,7 +685,7 @@ def _debate_panel(s):
         f'padding:8px 10px;border-radius:6px;font-size:14px;margin-bottom:6px"><b>🐂 Bull</b><br>{bull}</div>'
         f'<div style="background:#fdeceb;border-left:3px solid #b3261e;padding:8px 10px;border-radius:6px;'
         f'font-size:14px"><b>🐻 Bear</b><br>{bear}</div>'
-        f'<div style="font-size:12px;color:#9aa0a6;margin-top:4px">{html.escape(rlabel)}</div></div></details>')
+        f'<div style="font-size:12px;color:#9aa0a6;margin-top:4px">{_esc(rlabel)}</div></div></details>')
     return _box(
         f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:5px">'
         f'<span style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368">Research verdict</span>'
