@@ -347,6 +347,15 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     if s.get("divergence"):
         H.append(_box(f'⚡ <b>Divergence:</b> {_esc(s["divergence"])}',bg="#fdf5e0",border="#ecdca6"))
 
+    # For an ETF the news IS the point — put its constituents' news AND the fund's
+    # own news right here at the top, visible (not buried at the bottom).
+    if is_etf:
+        hn=(extras.get("etf_holding_news") or {}).get(tk,{})
+        hitems=[a for arts in hn.values() for a in arts]
+        if hitems:
+            H.append(_links_list(hitems,label="News on major holdings",limit=16,prefix_group=True))
+        H.append(_links_list(by_group.get(tk, []),label="ETF / fund news",limit=8))
+
     # ---- 2) CROWD sentiment ----
     H.append(_crowd_panel(cw))
     if not (cw and cw.get("has_data")):
@@ -458,13 +467,10 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     # ---- 5) DEBATE — research verdict + bull vs bear ----
     H.append(_debate_panel(s))
 
-    # ---- 6) NEWS ARTICLES — visible, at the end of the card ----
-    if is_etf:
-        hn=(extras.get("etf_holding_news") or {}).get(tk,{})
-        hitems=[a for arts in hn.values() for a in arts]
-        if hitems:
-            H.append(_links_list(hitems,label="News on major holdings",limit=16,prefix_group=True))
-    H.append(_links_list(by_group.get(tk, []),label="Sources & full articles",limit=8))
+    # ---- 6) NEWS ARTICLES — for a single stock, visible at the end of the card.
+    #        (ETF cards already show holdings + fund news at the top.) ----
+    if not is_etf:
+        H.append(_links_list(by_group.get(tk, []),label="Sources & full articles",limit=8))
     H.append("</div>")
     return "".join(H)
 

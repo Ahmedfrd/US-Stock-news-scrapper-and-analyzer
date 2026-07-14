@@ -112,7 +112,7 @@ def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="
         prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=peers)
         data["etf"] = prof
         for h in prof.holdings[:8]:
-            arts = _news_for(h.symbol, h.symbol, lookback, 4)
+            arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4)
             if arts: data["holding_news"][h.symbol] = arts
     return data
 
@@ -195,7 +195,7 @@ def main():
                 prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=s.get("peers"))
                 etf_profiles[tk] = prof
                 for h in prof.holdings[:8]:
-                    arts = _news_for(h.symbol, h.symbol, lookback, 4)
+                    arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4)
                     if arts: etf_hnews.setdefault(tk, {})[h.symbol] = arts
 
     print(f"[3/6] Sentiment + crowd ({'Reddit' if market=='PK' else 'Adanos'}) + market flags…")

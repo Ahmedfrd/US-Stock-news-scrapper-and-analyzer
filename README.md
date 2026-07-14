@@ -68,14 +68,17 @@ News first, noise last — in this order:
    earnings; earnings & outlook with management commentary from SEC filings.
 6. **Research verdict** — the 3-model bull/bear/judge debate.
 7. **Source articles** — a plain, always-visible list at the end of the card
-   (full articles are read, not just headlines).
+   (full articles are read, not just headlines). *ETF cards instead show their
+   constituents' news and the fund's own news at the TOP of the card — see below.*
 
 **ETF cards** additionally show: multi-horizon returns (1d→1y, YTD), risk
 (volatility, max drawdown, beta), NAV premium/discount, expense/yield/AUM,
 **move attribution by holding** (which components drove today's move, with a
 summed "explained move"), sector weights, vs-benchmark and vs-competitor-ETF
-tables, and **news on the top-8 underlying holdings** — grouped per holding,
-always visible at the end of the card.
+tables. **News on the top-8 underlying holdings (queried by company name, so
+foreign constituents like Samsung/SK Hynix are covered), grouped per holding,
+plus the fund's own news — shown at the TOP of the card**, since staying on top
+of constituent news is the whole point.
 
 ---
 
