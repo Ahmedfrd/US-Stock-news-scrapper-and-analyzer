@@ -269,11 +269,7 @@ def _instructions(tickers, topics, weekly, shariah=False):
   "stocks_to_watch": [
     {{"ticker": "NVDA", "call": "bullish|bearish|neutral",
       "reason": "one line: the catalyst and why it matters (may be outside the portfolio)"}}
-  ],
-  // stocks_to_watch MUST be US-listed tickers only (NYSE/NASDAQ symbols). NEVER use
-  // foreign-exchange suffixes (.KS, .T, .AS, .DE, .PA, .L, .TO, .HK). If the catalyst
-  // concerns a foreign company, include it ONLY via its US-listed ADR (e.g. TSM, ASML),
-  // otherwise leave it out.{shariah_line}
+  ],{shariah_line}
   "crypto_highlight": {{"call": "bullish|bearish|neutral",
       "points": ["2-4 DETAILED bullets on the crypto market with figures (BTC/ETH levels & % moves from the data, ETF flows, dominance, catalysts)"],
       "coins": [{{"symbol": "BTC", "call": "buy|accumulate|hold|reduce|sell",
@@ -289,7 +285,13 @@ def _instructions(tickers, topics, weekly, shariah=False):
 Stocks: {', '.join(tickers)}
 Topics: {', '.join(topics)}
 Fill "earnings" only when earnings/filing data is present; otherwise use empty strings.
-Only include stocks/topics/sectors that have data. Keep it tight."""
+The "stocks" array MUST contain one entry for EVERY name listed under Stocks above —
+ETFs/funds included; never omit a name.
+stocks_to_watch MUST be US-listed tickers only (NYSE/NASDAQ symbols) — never use
+foreign-exchange suffixes like .KS/.T/.AS/.DE/.PA/.L/.TO/.HK; if the catalyst concerns
+a foreign company, use its US-listed ADR (e.g. TSM, ASML) or leave it out.
+Only include topics/sectors that have data. Return STRICTLY valid JSON — no comments,
+no trailing commas. Keep it tight."""
 
 
 # --------------------------------------------------------------------------- #
@@ -417,6 +419,21 @@ def _heuristic(items, funds, extras, watchlist):
     return result
 
 
+def _fill_missing_stocks(data, items, funds, extras, watchlist, prov):
+    """Models sometimes omit names (especially ETFs) from the stocks array,
+    which silently dropped whole cards from the report. Backfill any missing
+    watchlist name with a heuristic card so every holding always renders."""
+    have = {(s.get("ticker") or "").strip().upper() for s in (data.get("stocks") or [])}
+    missing = [s for s in watchlist.get("stocks", [])
+               if s.get("ticker", "").strip() and s["ticker"].strip().upper() not in have]
+    if not missing:
+        return
+    print(f"[analyzer] {prov} omitted {', '.join(s['ticker'] for s in missing)} — "
+          f"filling with heuristic card(s)")
+    heur = _heuristic(items, funds, extras, {"stocks": missing, "topics": []})
+    data.setdefault("stocks", []).extend(heur["stocks"])
+
+
 # --------------------------------------------------------------------------- #
 #  Entry point with fallback chain + status
 # --------------------------------------------------------------------------- #
@@ -446,6 +463,7 @@ def analyze(items, funds, extras, config):
             try:
                 raw = providers.complete(prov, SYSTEM, user, model)
                 data = providers.normalize_text_fields(providers.parse_json(raw))
+                _fill_missing_stocks(data, items, funds, extras, watchlist, prov)
                 mdl = model or providers.DEFAULT_MODELS.get(prov)
                 status.update(engine=f"{prov} ({mdl})", ok=True,
                               reason="", attempts=status["attempts"] + [f"{prov}: ok"])

@@ -176,4 +176,12 @@ def parse_json(text: str) -> dict:
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end == -1:
         raise ValueError("no JSON object in model response")
-    return json.loads(text[start:end + 1])
+    blob = text[start:end + 1]
+    try:
+        return json.loads(blob)
+    except json.JSONDecodeError:
+        # Common model slips: '// comment' lines and trailing commas.
+        import re
+        cleaned = "\n".join(l for l in blob.splitlines() if not l.strip().startswith("//"))
+        cleaned = re.sub(r",\s*([}\]])", r"\1", cleaned)
+        return json.loads(cleaned)
