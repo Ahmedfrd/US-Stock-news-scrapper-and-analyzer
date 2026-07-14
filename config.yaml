@@ -72,9 +72,13 @@ analysis:
   debate_providers: {bull: groq, bear: openrouter, judge: gemini}
   provider: gemini            # gemini | groq | openrouter  (all free tiers)
   model: gemini-2.5-flash
-  fallbacks: [groq, openrouter]   # tried in order if the primary fails/rate-limits;
-                                  # if all fail, the free local heuristic runs.
-                                  # The report header always states what actually ran.
+  fallbacks: [gemini]   # if the primary fails/rate-limits, Gemini is the sole backup
+                        # (its free tier is far more generous than Groq/OpenRouter's,
+                        # and OpenRouter's unfunded tier caps at 50 req/day) — if that
+                        # also fails, the free local heuristic runs. A no-op today
+                        # since provider is already gemini; kept so switching
+                        # `provider` still backs up to gemini automatically.
+                        # The report header always states what actually ran.
 
 # Weekly sector deep-dive runs on this weekday (news scraped over the past 7 days).
 # Keep it a weekday if your schedule only runs Mon–Fri.

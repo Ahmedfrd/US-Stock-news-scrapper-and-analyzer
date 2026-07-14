@@ -115,8 +115,13 @@ def build_context(ticker, name, fund, tech, crowd_entry, news_items, prior=None)
 
 
 def _fallback_chain(primary):
-    return [primary] + [p for p in ("gemini", "groq", "openrouter")
-                        if p != primary and providers.available(p)]
+    """On failure, back up to Gemini only. Its free tier (~1,500 req/day) is far
+    more generous than Groq/OpenRouter's, and OpenRouter's unfunded free tier
+    caps at just 50 req/day — cascading through every other provider on every
+    failure burns retries and time on options just as likely to be rate-limited."""
+    if primary == "gemini" or not providers.available("gemini"):
+        return [primary]
+    return [primary, "gemini"]
 
 
 def _call(role, provider, sysmsg, ctx, task, ticker=""):
