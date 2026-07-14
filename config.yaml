@@ -24,7 +24,7 @@ watchlist:
       name: Wahed Dow Jones Islamic World ETF
       peers: [SPWO]
   topics:
-    - "Technolofy and semiconductor industry"
+    - "Technology and semiconductor industry"
     - "S&P 500 stock market"
     - "US inflation and interest rates"
     - "IPOs"
@@ -79,6 +79,11 @@ analysis:
 # Weekly sector deep-dive runs on this weekday (news scraped over the past 7 days).
 # Keep it a weekday if your schedule only runs Mon–Fri.
 weekly_sector_day: Thu   # Thu UTC = Friday morning HK time (see README)
+
+# The Market Digest is WEEKLY: it is built + emailed only on this UTC weekday
+# (the Portfolio Digest still goes out every scheduled run). Manual
+# "Run workflow" runs always produce both, so you can test any day.
+market_digest_day: Thu   # Thu UTC = Friday morning HK — same day as the sector deep-dive
 
 delivery:
   method: email               # email | telegram | both | none

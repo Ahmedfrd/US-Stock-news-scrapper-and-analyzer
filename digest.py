@@ -70,6 +70,19 @@ def _grid(rows):
 def _box(inner, bg="#fafbfc", border="#e9ecef"):
     return f'<div style="background:{bg};border:1px solid {border};border-radius:8px;padding:10px 12px;margin:6px 0">{inner}</div>'
 
+def _prose(text, fs="15px", color="#3c4043"):
+    """Render AI free text. The prompts ask for newline-separated '- ' lines, so
+    multi-line text becomes a bullet list; single-line text stays a sentence.
+    Heuristic-path plain sentences pass through unchanged."""
+    if not text: return ""
+    lines=[l.strip().lstrip("-•–· ").strip() for l in str(text).splitlines() if l.strip()]
+    lines=[l for l in lines if l]
+    if not lines: return ""
+    if len(lines)==1:
+        return f'<div style="font-size:{fs};color:{color};margin:4px 0">{html.escape(lines[0])}</div>'
+    return "".join(f'<div style="font-size:{fs};color:{color};margin:4px 0 4px 4px">• {html.escape(l)}</div>'
+                   for l in lines)
+
 def _chip(label,value,tone="neutral"):
     c={"good":"#0a7d33","bad":"#b3261e","warn":"#8a6d00","neutral":"#3c4043"}.get(tone,"#3c4043")
     return (f'<span style="display:inline-block;background:#eef1f4;border-radius:7px;padding:4px 9px;'
@@ -79,7 +92,7 @@ def _chip(label,value,tone="neutral"):
 def _crowd_line(cw):
     """Compact one-liner: the blended consensus."""
     if not cw or not cw.get("has_data"):
-        return '<span style="color:#9aa0a6">crowd: n/a</span>'
+        return '<span style="color:#9aa0a6">crowd: no measurable discussion</span>'
     c = cw.get("consensus", {})
     bits = [f'crowd {_sent_pill(c.get("label"))}']
     if c.get("bullish") is not None:
@@ -155,11 +168,17 @@ def _tech_panel(t):
 
 def _links_block(items,label="Sources & full articles"):
     if not items: return ""
+    seen=set(); uniq=[]
+    for it in items:  # the same headline can arrive for several holdings/queries
+        k=(it.title or "").strip().lower()
+        if not k or k in seen: continue
+        seen.add(k); uniq.append(it)
+    if not uniq: return ""
     rows="".join(f'<div style="font-size:15px;margin:4px 0"><a href="{html.escape(it.url)}" '
                  f'style="color:#1a1a1a;text-decoration:none">• {html.escape(it.title)}</a> '
-                 f'<span style="color:#9aa0a6">— {html.escape(it.source)}</span></div>' for it in items)
+                 f'<span style="color:#9aa0a6">— {html.escape(it.source)}</span></div>' for it in uniq)
     return (f'<details style="margin-top:8px"><summary style="cursor:pointer;color:#3367d6;font-size:15px;'
-            f'font-weight:600;user-select:none">▾ {label} ({len(items)}) — click to expand</summary>'
+            f'font-weight:600;user-select:none">▾ {label} ({len(uniq)}) — click to expand</summary>'
             f'<div style="margin-top:6px;padding-left:4px">{rows}</div></details>')
 
 def _banner(status):
@@ -224,6 +243,9 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     sg=(extras.get("sentiment") or {}).get(tk,{}); cw=(extras.get("crowd") or {}).get(tk,{})
     fils=extras.get("filings") or {}; is_etf=bool(f and f.is_etf)
     price=_num(f.price) if f else "n/a"; chg=_pct_span(f.change_1d) if f else ""
+    cur=(getattr(f,"currency","") or "") if f else ""
+    if cur and cur!="USD" and price!="n/a":
+        price+=f' <span style="color:#8a6d00;font-size:13px;font-weight:700">{html.escape(cur)}</span>'
     H=[]
     H.append(f'<div style="border:1px solid #e5e7eb;border-radius:10px;padding:16px 18px;margin-bottom:16px;background:#fff">')
     H.append(f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">'
@@ -242,8 +264,14 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
         H.append(f'<div style="margin-top:4px">{_pill(rlab, *col)}'
                  f'<span style="font-size:13px;color:#9aa0a6">{ratios}</span></div>')
     H.append(f'<div style="font-size:16px;color:#3c4043;margin:6px 0 4px">{price} &nbsp; {chg}</div>')
+    if sg.get("n"):
+        tone=f'news tone {sg.get("score","n/a")} ({sg.get("label","n/a")})'
+        if sg.get("basis")=="holdings":
+            tone+=' <span style="color:#9aa0a6;font-size:13px">(from holdings news)</span>'
+    else:
+        tone='<span style="color:#9aa0a6">news tone: no direct news this run</span>'
     H.append(f'<div style="font-size:15px;color:#3c4043;margin-bottom:8px">'
-             f'news tone {sg.get("score","n/a")} ({sg.get("label","n/a")}) &nbsp;·&nbsp; {_crowd_line(cw)}</div>')
+             f'{tone} &nbsp;·&nbsp; {_crowd_line(cw)}</div>')
 
     # badges
     badges=""
@@ -331,9 +359,9 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
             H.append('<div style="font-size:14px;color:#9aa0a6;margin:2px 0">👥 Crowd sentiment: no Adanos data for this name this run.</div>')
         elif st == "pk_thin":
             H.append('<div style="font-size:14px;color:#9aa0a6;margin:2px 0">👥 Crowd sentiment: no Reddit chatter found for this name (PSX discussion is thin; set REDDIT_CLIENT_ID/SECRET for reliable search).</div>')
-    H.append(f'<div style="margin-bottom:6px;font-size:16px">{html.escape(s.get("summary",""))}</div>')
+    H.append(f'<div style="margin-bottom:6px">{_prose(s.get("summary",""),fs="16px",color="#1a1a1a")}</div>')
     if s.get("news_impact"):
-        H.append(_box(f'<b style="color:#3367d6">News impact on the company:</b> {html.escape(s["news_impact"])}',bg="#eef3fb",border="#d5e2f7"))
+        H.append(_box(f'<b style="color:#3367d6">News impact on the company:</b>{_prose(s["news_impact"])}',bg="#eef3fb",border="#d5e2f7"))
     if s.get("fundamental_read"):
         H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">📊 {html.escape(s["fundamental_read"])}</div>')
     if s.get("crowd_note"):
@@ -351,7 +379,7 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
         inner='<div style="font-weight:700;color:#3367d6;margin-bottom:4px;font-size:15px">Fund analysis</div>'
         for key,lab in [("move_explainer","What moved it today"),("holdings_news_impact","Holdings news & impact"),
                         ("nav_read","NAV"),("vs_market","vs market"),("vs_peers","vs competitors"),("risks","Risks")]:
-            if etf_an.get(key): inner+=f'<div style="margin:2px 0;font-size:15px"><b>{lab}:</b> {html.escape(etf_an[key])}</div>'
+            if etf_an.get(key): inner+=f'<div style="margin:4px 0;font-size:15px"><b>{lab}:</b>{_prose(etf_an[key])}</div>'
         H.append(_box(inner,bg="#f4f6fb",border="#dde4f0"))
         hn=(extras.get("etf_holding_news") or {}).get(tk,{})
         all_h=[a for arts in hn.values() for a in arts]
@@ -372,13 +400,13 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
         H.append(_box(f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
                       f'<span style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368">Technical read</span>'
                       f'{_call_pill(tr.get("call"))}<span style="font-size:13px;color:#9aa0a6">AI, technicals only</span></div>'
-                      f'<div style="font-size:15px;color:#3c4043;margin-top:6px">{html.escape(tr.get("rationale",""))}</div>',bg="#fbfcfd"))
+                      f'<div style="margin-top:6px">{_prose(tr.get("rationale",""))}</div>',bg="#fbfcfd"))
     cc=s.get("combined_call") or {}
     if cc.get("call"):
         H.append(_box(f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
                       f'<span style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368">Combined call</span>'
                       f'{_call_pill(cc.get("call"))}<span style="font-size:13px;color:#9aa0a6">AI: technicals + fundamentals + news</span></div>'
-                      f'<div style="font-size:15px;color:#3c4043;margin-top:6px">{html.escape(cc.get("rationale",""))}</div>',bg="#fbfbfd"))
+                      f'<div style="margin-top:6px">{_prose(cc.get("rationale",""))}</div>',bg="#fbfbfd"))
 
     H.append(_links_block(by_group.get(tk, [])[:8]))
     H.append("</div>")
@@ -447,7 +475,7 @@ def build_portfolio(analysis, items, funds, extras):
     B=[]
     B.append(f'<div style="background:#f6f8fa;border-left:4px solid #3367d6;padding:12px 16px;border-radius:6px;margin-bottom:18px">'
              f'<div style="font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:#3367d6;margin-bottom:6px">Portfolio overview</div>'
-             f'<div style="font-size:16px">{html.escape(analysis.get("market_overview",""))}</div></div>')
+             f'{_prose(analysis.get("market_overview",""),fs="16px",color="#1a1a1a")}</div>')
     B.append(_flags_row(extras.get("flags")))
     B.append(_lookthrough_panel(extras.get("look_through")))
     prio=analysis.get("priority", [])
@@ -461,7 +489,7 @@ def build_portfolio(analysis, items, funds, extras):
     if macro.get("summary") or macro.get("points"):
         B.append(_h2("Macro backdrop"))
         if macro.get("summary"):
-            B.append(f'<div style="font-size:16px;margin-bottom:6px">{html.escape(macro["summary"])}</div>')
+            B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
         for p in (macro.get("points") or [])[:6]:
             B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {html.escape(p)}</div>')
         if macro.get("watch"):
@@ -490,7 +518,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
     B=[]
     B.append(f'<div style="background:#f6f8fa;border-left:4px solid #3367d6;padding:12px 16px;border-radius:6px;margin-bottom:18px">'
              f'<div style="font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:#3367d6;margin-bottom:6px">Market overview</div>'
-             f'<div style="font-size:16px">{html.escape(port_analysis.get("market_overview",""))}</div></div>')
+             f'{_prose(port_analysis.get("market_overview",""),fs="16px",color="#1a1a1a")}</div>')
     B.append(_flags_row(extras.get("flags")))
 
     sh=port_analysis.get("sector_highlights", [])
@@ -559,7 +587,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
             name=t.get("topic","")
             inner=(f'<div style="display:flex;justify-content:space-between;align-items:center">'
                    f'<span style="font-weight:700;font-size:17px">{html.escape(name)}</span> {_sent_pill(t.get("sentiment"))}</div>'
-                   f'<div style="font-size:15px;margin:4px 0">{html.escape(t.get("summary",""))}</div>')
+                   f'{_prose(t.get("summary",""))}')
             kc=t.get("key_companies") or []
             if kc:
                 inner+='<div style="font-size:15px;margin:4px 0"><b>Key movers (not in your portfolio):</b></div>'
@@ -572,7 +600,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
         B.append(_h2("Weekly sector deep-dive"))
         for sec in sectors:
             name=sec.get("sector","")
-            inner=f'<div style="font-weight:700;font-size:17px">{html.escape(name)}</div><div style="font-size:15px;margin:4px 0">{html.escape(sec.get("summary",""))}</div>'
+            inner=f'<div style="font-weight:700;font-size:17px">{html.escape(name)}</div>{_prose(sec.get("summary",""))}'
             for d in (sec.get("developments") or []): inner+=f'<div style="font-size:15px;margin:2px 0">• {html.escape(d)}</div>'
             if sec.get("read_across"): inner+=f'<div style="font-size:15px;color:#5f6368;margin-top:4px">Read-across: {html.escape(sec["read_across"])}</div>'
             inner+=_links_block(sec_news.get(name, [])[:5])
@@ -581,7 +609,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
     macro=port_analysis.get("macro", {}) or {}; macro_items=by_group.get("Macro", [])
     if macro.get("summary") or macro.get("points") or macro_items:
         B.append(_h2("Macro"))
-        if macro.get("summary"): B.append(f'<div style="font-size:16px;margin-bottom:6px">{html.escape(macro["summary"])}</div>')
+        if macro.get("summary"): B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
         for p in (macro.get("points") or [])[:6]:
             B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {html.escape(p)}</div>')
         if macro.get("watch"): B.append('<div style="font-size:15px;color:#5f6368;margin:6px 0">Watch: '+" · ".join(html.escape(w) for w in macro["watch"])+'</div>')
@@ -603,10 +631,15 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
 
 def _stock_text(tk,s,funds,extras,by_group):
     f=funds.get(tk); sg=(extras.get("sentiment") or {}).get(tk,{}); cw=(extras.get("crowd") or {}).get(tk,{})
-    L=[f"\n{tk}"+((f"  {f.price:.2f}" if f and f.price is not None else "")+(f" ({f.change_1d:+.2f}%)" if f and f.change_1d is not None else ""))
+    cur=(getattr(f,"currency","") or "") if f else ""
+    curtag=f" {cur}" if cur and cur!="USD" else ""
+    L=[f"\n{tk}"+((f"  {f.price:.2f}{curtag}" if f and f.price is not None else "")+(f" ({f.change_1d:+.2f}%)" if f and f.change_1d is not None else ""))
        +f"  [{(s.get('impact') or '').upper()} / {(s.get('sentiment') or '').upper()}]"]
     con=(cw or {}).get("consensus",{})
-    L.append(f"  news tone {sg.get('score','n/a')} ({sg.get('label','n/a')}); "
+    tone=(f"news tone {sg.get('score','n/a')} ({sg.get('label','n/a')})"
+          + (" [from holdings news]" if sg.get("basis")=="holdings" else "")) if sg.get("n") \
+         else "news tone: no direct news this run"
+    L.append(f"  {tone}; "
              f"crowd {con.get('label','n/a')} ({con.get('bullish','n/a')}% bull / {con.get('bearish','n/a')}% bear, "
              f"buzz {con.get('buzz','n/a')}, {len((cw or {}).get('sources',{}))} sources)")
     L.append(f"  {s.get('summary','')}")
@@ -635,8 +668,8 @@ def _debate_panel(s):
         extra += f'<div style="font-size:14px;margin-top:6px"><b>Start here:</b> {html.escape(v["start_here"])}</div>'
     if v.get("what_would_change_it"):
         extra += f'<div style="font-size:14px;color:#5f6368;margin-top:3px"><b>Would change the call:</b> {html.escape(v["what_would_change_it"])}</div>'
-    bull = html.escape(d.get("bull", "")).replace("\n", "<br>")
-    bear = html.escape(d.get("bear", "")).replace("\n", "<br>")
+    bull = _prose(d.get("bull", ""), fs="14px", color="#1a1a1a")
+    bear = _prose(d.get("bear", ""), fs="14px", color="#1a1a1a")
     roles = d.get("roles", {})
     rlabel = (f'bull: {roles.get("bull","?")} · bear: {roles.get("bear","?")} · judge: {roles.get("judge","?")}'
               if roles else "")
@@ -654,7 +687,7 @@ def _debate_panel(s):
         f'{_call_pill(v.get("call"))}'
         f'<span style="font-size:13px;font-weight:700;color:{conv_col}">{conv.upper()} conviction</span>'
         f'<span style="font-size:12px;color:#9aa0a6">3-model debate</span></div>'
-        f'<div style="font-size:15px;color:#1a1a1a">{html.escape(v.get("verdict",""))}</div>'
+        f'{_prose(v.get("verdict",""),color="#1a1a1a")}'
         + (f'<div style="font-size:14px;margin-top:6px"><b>Key risks:</b><ul style="margin:3px 0;padding-left:20px">{risks}</ul></div>' if risks else "")
         + extra + debate_block,
         bg="#f7f9fc")

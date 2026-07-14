@@ -34,24 +34,32 @@ def _retry(fn, tries=3, base=1.5):
             return fn()
         except Exception as e:  # noqa: BLE001
             last = e
-            # Back off on rate limits / transient errors.
-            time.sleep(base * (2 ** i))
+            if i >= tries - 1:
+                break
+            # Rate limits need a real pause (free tiers are per-minute);
+            # other transient errors get a short exponential backoff.
+            msg = str(e).lower()
+            wait = 15 * (i + 1) if ("429" in msg or "rate limit" in msg) else base * (2 ** i)
+            time.sleep(wait)
     raise ProviderError(str(last))
 
 
 # --------------------------------------------------------------------------- #
 #  Gemini (Google AI Studio) — native REST
 # --------------------------------------------------------------------------- #
-def _gemini(system: str, user: str, model: str) -> str:
+def _gemini(system: str, user: str, model: str, json_mode: bool = True) -> str:
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         raise ProviderError("GEMINI_API_KEY not set")
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
            f"{model}:generateContent?key={key}")
+    gen_cfg = {"temperature": 0.3}
+    if json_mode:
+        gen_cfg["responseMimeType"] = "application/json"
     body = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"parts": [{"text": user}]}],
-        "generationConfig": {"temperature": 0.3, "responseMimeType": "application/json"},
+        "generationConfig": gen_cfg,
     }
 
     def call():
@@ -75,7 +83,8 @@ _OPENAI_COMPATIBLE = {
 }
 
 
-def _openai_style(provider: str, system: str, user: str, model: str) -> str:
+def _openai_style(provider: str, system: str, user: str, model: str,
+                  json_mode: bool = True) -> str:
     endpoint, env = _OPENAI_COMPATIBLE[provider]
     key = os.environ.get(env)
     if not key:
@@ -86,8 +95,12 @@ def _openai_style(provider: str, system: str, user: str, model: str) -> str:
         "temperature": 0.3,
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
-        "response_format": {"type": "json_object"},
     }
+    # Only force JSON output when the caller actually wants JSON — Groq rejects
+    # json_object mode (HTTP 400) when the prompt doesn't ask for JSON, which
+    # silently killed every prose call (e.g. the debate bull/bear cases).
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
 
     def call():
         r = requests.post(endpoint, headers=headers, json=body, timeout=90)
@@ -109,13 +122,14 @@ DEFAULT_MODELS = {
 }
 
 
-def complete(provider: str, system: str, user: str, model: str | None = None) -> str:
+def complete(provider: str, system: str, user: str, model: str | None = None,
+             json_mode: bool = True) -> str:
     provider = (provider or "gemini").lower()
     model = model or DEFAULT_MODELS.get(provider)
     if provider == "gemini":
-        return _gemini(system, user, model)
+        return _gemini(system, user, model, json_mode=json_mode)
     if provider in _OPENAI_COMPATIBLE:
-        return _openai_style(provider, system, user, model)
+        return _openai_style(provider, system, user, model, json_mode=json_mode)
     raise ProviderError(f"Unknown provider: {provider}")
 
 

@@ -54,6 +54,15 @@ def is_weekly(config, forced):
     if forced or os.environ.get("RUN_MODE","").lower()=="weekly": return True
     return _WEEKDAYS[dt.date.today().weekday()] == config.get("weekly_sector_day","Fri")
 
+def is_market_day(config, args):
+    """The Market Digest is weekly (market_digest_day, UTC); the Portfolio Digest
+    stays on every scheduled run. Manual runs (workflow_dispatch / --dry-run /
+    --force-market) always produce both so testing is predictable."""
+    if args.dry_run or args.force_market: return True
+    if os.environ.get("GITHUB_EVENT_NAME","") == "workflow_dispatch": return True
+    day = config.get("market_digest_day", config.get("weekly_sector_day","Thu"))
+    return _WEEKDAYS[dt.date.today().weekday()] == day
+
 def _market_flags(instruments):
     if instruments is None: pairs=[{"name":n,"symbol":s} for n,s in _DEFAULT_FLAGS]
     elif not instruments: return []
@@ -135,6 +144,8 @@ def main():
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--weekly", action="store_true")
+    ap.add_argument("--force-market", action="store_true",
+                    help="build the Market Digest even off its weekly day")
     args = ap.parse_args()
     config = load_config(args.config)
     print("[env] " + " | ".join(
@@ -143,6 +154,11 @@ def main():
                   "SEC_USER_AGENT", "EMAIL_PASSWORD"]))
     stocks = config.get("watchlist", {}).get("stocks", [])
     weekly = is_weekly(config, args.weekly)
+    make_market = is_market_day(config, args)
+    if not make_market:
+        print(f"[market] Market Digest runs weekly (market_digest_day: "
+              f"{config.get('market_digest_day', config.get('weekly_sector_day','Thu'))} UTC) "
+              f"— today is Portfolio Digest only.")
     benchmark = config.get("etf_benchmark", "SPY")
     lookback = int(config.get("sources", {}).get("lookback_hours", 24))
     max_items = int(config.get("sources", {}).get("max_items_per_query", 8))
@@ -236,9 +252,26 @@ def main():
     print(f"      engine: {status['engine']} (ok={status['ok']})")
 
     # ---- Stage 2: fully analyse AI-derived stocks to watch ----
+    # (Market-Digest-only content — skipped on non-market days to save quota.)
     shariah_only = config.get("shariah_only", False)
     watch = [w for w in (port_analysis.get("stocks_to_watch") or [])
              if w.get("ticker") and w["ticker"].upper() not in {t.upper() for t in port_tickers}]
+    # Defense in depth alongside the prompt: the US Market Digest must not carry
+    # foreign-exchange listings (KRW/JPY prices, no Adanos/Finnhub coverage).
+    # Class shares like BRK.B stay; Yahoo exchange suffixes and numeric roots go.
+    _FOREIGN_SFX = {"KS","KQ","T","AS","DE","F","PA","L","TO","V","HK","SS","SZ","TW","TWO",
+                    "SI","AX","NZ","SW","MI","MC","ST","OL","CO","HE","VI","BR","LS","SA",
+                    "MX","NS","BO","IR","IS","JK","BK","KL"}
+    def _is_foreign(tk):
+        tk = tk.strip().upper()
+        root, _, sfx = tk.rpartition(".")
+        return (root and sfx in _FOREIGN_SFX) or tk.split(".")[0].isdigit()
+    dropped = [w["ticker"] for w in watch if _is_foreign(w["ticker"])]
+    if dropped:
+        print(f"      dropped non-US listing(s) from stocks-to-watch: {', '.join(dropped)}")
+    watch = [w for w in watch if not _is_foreign(w["ticker"])]
+    if not make_market:
+        watch = []
     watch = watch[:6]
     watch_analysis = {"stocks": []}
     watch_reasons, shariah_res = {}, {}
@@ -286,7 +319,22 @@ def main():
     else:
         print("[5/6] No external stocks to watch this run.")
 
-    print("[6/6] Building two reports…")
+    # ETFs rarely get fund-level headlines (Finnhub company-news doesn't cover
+    # them), so their news tone was always n/a — fall back to the tone of their
+    # underlying holdings' headlines, labelled as such in the report.
+    senti = extras.get("sentiment") or {}
+    for tk, hn in (extras.get("etf_holding_news") or {}).items():
+        if senti.get(tk, {}).get("n"):
+            continue  # the fund had direct news after all
+        scores = [sentiment.score_text(f"{a.title}. {a.summary}")
+                  for arts in hn.values() for a in arts]
+        scores = [s for s in scores if s is not None]
+        if scores:
+            avg = round(sum(scores) / len(scores), 3)
+            senti[tk] = {"score": avg, "label": sentiment.label(avg),
+                         "n": len(scores), "basis": "holdings"}
+
+    print(f"[6/6] Building {'two reports' if make_market else 'the portfolio report'}…")
     # Optional three-layer bull/bear/judge debate on selected names.
     try:
         analyzer.run_debates(port_analysis, watch_analysis, funds, extras, items, config)
@@ -311,8 +359,10 @@ def main():
     tag = "weekly" if weekly else "daily"
     reports = [
         ("portfolio", *digest.build_portfolio(port_analysis, items, funds, extras)),
-        ("market", *digest.build_market(port_analysis, watch_analysis, items, funds, extras, watch_reasons)),
     ]
+    if make_market:
+        reports.append(("market", *digest.build_market(port_analysis, watch_analysis,
+                                                       items, funds, extras, watch_reasons)))
     for kind, subject, html_body, text_body in reports:
         path = os.path.join(out_dir, f"digest-{dt.date.today():%Y-%m-%d}-{kind}.html")
         with open(path, "w", encoding="utf-8") as f: f.write(html_body)

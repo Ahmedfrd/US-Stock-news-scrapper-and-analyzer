@@ -22,6 +22,7 @@ class Fundamentals:
     sector: str = ""
     industry: str = ""
     price: float | None = None
+    currency: str = ""                  # quote currency (e.g. USD, KRW) — non-USD is labelled in the report
     change_1d: float | None = None      # %
     ret_1m: float | None = None
     ret_3m: float | None = None
@@ -183,6 +184,7 @@ def fetch(ticker: str, name: str = "") -> Fundamentals:
         f.name = _get(info, "shortName", "longName") or f.name
         f.sector = info.get("sector", "") or ""
         f.industry = info.get("industry", "") or ""
+        f.currency = (info.get("currency") or "").upper()
 
         quote_type = (info.get("quoteType") or "").upper()
         f.is_etf = quote_type in ("ETF", "MUTUALFUND")
@@ -254,7 +256,9 @@ def fetch(ticker: str, name: str = "") -> Fundamentals:
                     ed = ed[0]
             if ed is not None:
                 ed = ed if isinstance(ed, dt.date) else getattr(ed, "date", lambda: None)()
-                if ed:
+                # Yahoo sometimes returns a stale, already-past date (common for
+                # foreign listings) — showing "-82d" as upcoming is misleading.
+                if ed and (ed - dt.date.today()).days >= -1:
                     f.next_earnings = ed.strftime("%Y-%m-%d")
                     f.days_to_earnings = (ed - dt.date.today()).days
         except Exception:

@@ -1,8 +1,10 @@
 name: Market Digest (off-machine)
 
-# Runs 07:00 Hong Kong time, Mon-Fri (23:00 UTC the previous day). On
-# weekly_sector_day (set to Thu = Friday-morning HK) it also adds the weekly
-# sector deep-dive. GitHub cron is UTC. Nothing runs on your own computer.
+# Runs 07:00 Hong Kong time, Mon-Fri (23:00 UTC the previous day). The
+# Portfolio Digest goes out every run; the Market Digest only on
+# market_digest_day (config.yaml, default Thu UTC = Friday-morning HK, same
+# day as the weekly sector deep-dive). Manual "Run workflow" runs always
+# produce BOTH reports. GitHub cron is UTC. Nothing runs on your own computer.
 on:
   schedule:
     - cron: "0 23 * * 0-4"

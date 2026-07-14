@@ -3,13 +3,15 @@
 A free, automatic, off-machine research brief for your portfolio. Every weekday
 morning it scrapes finance + macro + crypto news, pulls the fundamentals,
 technicals, and crowd-sentiment data behind it, has a free AI analyse everything,
-and emails you **two reports**:
+and emails you **two reports** (all analysis written as scannable bullet points):
 
-- **📊 Portfolio Digest** — your holdings in depth, plus a portfolio-wide
-  look-through concentration view.
-- **🇺🇸 Market Digest US** — the general market: global flags, detailed sector
-  highlights, Shariah-screened *stocks to watch* (each fully analysed like a
-  holding), a major-coins crypto section, industries & themes, and macro.
+- **📊 Portfolio Digest** *(every weekday)* — your holdings in depth, plus a
+  portfolio-wide look-through concentration view.
+- **🇺🇸 Market Digest US** *(weekly, on `market_digest_day` — default Thu UTC =
+  Friday morning HK; manual runs always include it)* — the general market:
+  global flags, detailed sector highlights, Shariah-screened *stocks to watch*
+  (US-listed only, each fully analysed like a holding), a major-coins crypto
+  section, industries & themes, and macro.
 
 Runs on GitHub's servers on a schedule. **Nothing runs on your own computer.**
 Everything is free (one optional key adds multi-source crowd sentiment).
@@ -31,7 +33,9 @@ Everything is free (one optional key adds multi-source crowd sentiment).
 - **A full card per holding** (stock or ETF) — see below.
 - **Macro backdrop** — detailed paragraph + figure-cited bullets + watch list.
 
-### 🇺🇸 Market Digest US
+### 🇺🇸 Market Digest US (weekly)
+- Built + emailed once a week, on `market_digest_day` (UTC weekday, default
+  Thu). Manual **Run workflow** runs always produce it for testing.
 - **Market overview** + **global market flags**.
 - **Sector highlights** — sectors affected by the day's news flow, each
   bullish/bearish/neutral with 3–5 detailed, figure-cited bullets.
@@ -100,7 +104,8 @@ No AI key at all → a local heuristic still produces both reports (clearly labe
 ### 2. Repo
 Create a **private** GitHub repo and upload the project files. The drag-and-drop
 uploader skips the hidden `.github` folder, so create the workflow via
-**Actions → set up a workflow yourself** and paste in `daily-digest.yml`.
+**Actions → set up a workflow yourself** and paste in
+`.github/workflows/main.yml`.
 
 ### 3. Secrets — AND the workflow env block
 Repo → **Settings → Secrets and variables → Actions → Secrets tab → New
@@ -149,6 +154,8 @@ the emails or download the **digest** artifact (contains both HTML reports).
 - `crypto_watch` — major coins for the crypto section (`[]` disables).
 - `market_flags` — omit for defaults, `[]` to hide, or customise.
 - `weekly_sector_day` — UTC weekday for the weekly deep-dive (`Thu` = Friday-morning HK).
+- `market_digest_day` — UTC weekday the (weekly) Market Digest goes out
+  (defaults to `weekly_sector_day`); the Portfolio Digest goes out every run.
 - `sources.*` — news toggles, `fetch_full_articles`, `relevance_filter`,
   `adanos_platforms` (`[reddit, x, news, polymarket]`), `lookback_hours`.
 - `analysis` — AI chain: gemini → groq → openrouter → heuristic.
@@ -182,7 +189,7 @@ analyzer.py       fuses everything → structured analysis (AI owns the calls)
 digest.py         renders the two phone-friendly reports (HTML + text)
 delivery.py       email + Telegram
 main.py           orchestrates the two-report run (+ [env]/[adanos] diagnostics)
-.github/workflows/daily-digest.yml   scheduler + secrets mapping + artifact upload
+.github/workflows/main.yml   scheduler + secrets mapping + artifact upload
 ```
 
 ## Free-tier budget (typical: 5 holdings, weekday runs)

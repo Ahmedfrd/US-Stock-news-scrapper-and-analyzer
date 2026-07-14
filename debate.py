@@ -114,11 +114,26 @@ def build_context(ticker, name, fund, tech, crowd_entry, news_items, prior=None)
     return "\n".join(L)
 
 
-def _call(role, provider, sysmsg, ctx, task):
-    try:
-        return providers.complete(provider, sysmsg, f"{ctx}\n\nTASK: {task}").strip()
-    except Exception as e:  # noqa: BLE001
-        return f"[{role} unavailable: {e}]"
+def _fallback_chain(primary):
+    return [primary] + [p for p in ("gemini", "groq", "openrouter")
+                        if p != primary and providers.available(p)]
+
+
+def _call(role, provider, sysmsg, ctx, task, ticker=""):
+    """Run one advocacy role. Tries the assigned provider, then any other
+    available provider; logs the real error to the run log and never leaks a
+    raw error string into the report."""
+    for prov in _fallback_chain(provider):
+        try:
+            # Prose output — json_mode must stay off: Groq returns HTTP 400 on
+            # JSON mode when the prompt doesn't ask for JSON, which silently
+            # killed every bull/bear call.
+            return providers.complete(prov, sysmsg, f"{ctx}\n\nTASK: {task}",
+                                      json_mode=False).strip()
+        except Exception as e:  # noqa: BLE001
+            print(f"[debate] {role} for {ticker} via {prov} failed: {e}", flush=True)
+    return (f"({role} case unavailable this run — all AI providers failed or were "
+            f"rate-limited; details in the run log)")
 
 
 def run(ticker, name, ctx, config) -> dict | None:
@@ -126,17 +141,22 @@ def run(ticker, name, ctx, config) -> dict | None:
     if not roles:
         return None
     bull = _call("bull", roles["bull"], _BULL_SYS, ctx,
-                 f"Make the bull case for {ticker}.")
+                 f"Make the bull case for {ticker}.", ticker)
     bear = _call("bear", roles["bear"], _BEAR_SYS, ctx,
-                 f"Make the bear case for {ticker}.")
+                 f"Make the bear case for {ticker}.", ticker)
     judge_ctx = (f"{ctx}\n\n=== BULL ANALYST ===\n{bull}\n\n=== BEAR ANALYST ===\n{bear}")
     verdict = {}
-    try:
-        raw = providers.complete(roles["judge"], _JUDGE_SYS, judge_ctx +
-                                 f"\n\nTASK: Judge {ticker} and return the JSON.")
-        verdict = providers.parse_json(raw)
-    except Exception:
+    for prov in _fallback_chain(roles["judge"]):
+        try:
+            raw = providers.complete(prov, _JUDGE_SYS, judge_ctx +
+                                     f"\n\nTASK: Judge {ticker} and return the JSON.")
+            verdict = providers.parse_json(raw)
+            break
+        except Exception as e:  # noqa: BLE001
+            print(f"[debate] judge for {ticker} via {prov} failed: {e}", flush=True)
+    if not verdict.get("call"):
         verdict = {"call": "hold", "conviction": "low",
-                   "verdict": "Judge could not be reached; see bull/bear cases.",
+                   "verdict": "Judge unavailable this run (provider errors — see the run "
+                              "log); read the bull/bear cases below.",
                    "key_risks": [], "what_would_change_it": "", "start_here": ""}
     return {"bull": bull, "bear": bear, "verdict": verdict, "roles": roles}

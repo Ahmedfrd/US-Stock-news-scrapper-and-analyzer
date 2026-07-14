@@ -209,8 +209,10 @@ SYSTEM = (
     "outside the portfolio) with a one-line why. For ETFs analyse at the fund level. "
     "Use ONLY the data provided; never invent numbers. Be SPECIFIC and QUANTITATIVE — "
     "cite concrete figures (price %, index/commodity levels from the market flags, deal "
-    "sizes, targets) in the macro, sector and industry sections; those must be detailed "
-    "paragraphs, not one-liners. This is informational analysis, NOT investment advice."
+    "sizes, targets) in the macro, sector and industry sections. FORMAT: write every "
+    "multi-sentence free-text field as newline-separated bullet lines, each starting "
+    "with '- ' and stating ONE point with its figures — never a dense paragraph. "
+    "This is informational analysis, NOT investment advice."
 )
 
 
@@ -232,13 +234,13 @@ def _instructions(tickers, topics, weekly, shariah=False):
     return f"""Return ONLY a JSON object (no prose, no code fences):
 
 {{
-  "market_overview": "3-4 sentences tying today's news to the macro backdrop",
+  "market_overview": "3-5 bullet lines (each starting '- ', one concrete fact with figures) tying today's news to the macro backdrop",
   "priority": [{{"ticker": "AAPL", "why": "why this matters most today"}}],
   "stocks": [
     {{"ticker": "AAPL",
       "impact": "high|medium|low",
       "sentiment": "bullish|bearish|neutral|mixed",
-      "summary": "2-3 sentences: what happened AND the implication given fundamentals/valuation",
+      "summary": "2-3 bullet lines (each starting '- '): what happened AND the implication given fundamentals/valuation",
       "news_impact": "the concrete effect of today's news on THIS company's financials/outlook/competitive position — cite the specific headline and the specific financial consequence; empty string if no material news",
       "fundamental_read": "1 sentence on financial standing (for an ETF: what the fund holds / its tilt)",
       "divergence": "mismatch between news, price move, fundamentals — or empty string",
@@ -265,17 +267,21 @@ def _instructions(tickers, topics, weekly, shariah=False):
       "points": ["3-5 DETAILED bullets, each a full sentence with CONCRETE FIGURES where available (price moves %, index/commodity levels from the market flags, deal sizes, analyst targets, guidance numbers) — not vague one-liners"]}}
   ],
   "stocks_to_watch": [
-    {{"ticker": "OGDC", "call": "bullish|bearish|neutral",
+    {{"ticker": "NVDA", "call": "bullish|bearish|neutral",
       "reason": "one line: the catalyst and why it matters (may be outside the portfolio)"}}
-  ],{shariah_line}
+  ],
+  // stocks_to_watch MUST be US-listed tickers only (NYSE/NASDAQ symbols). NEVER use
+  // foreign-exchange suffixes (.KS, .T, .AS, .DE, .PA, .L, .TO, .HK). If the catalyst
+  // concerns a foreign company, include it ONLY via its US-listed ADR (e.g. TSM, ASML),
+  // otherwise leave it out.{shariah_line}
   "crypto_highlight": {{"call": "bullish|bearish|neutral",
       "points": ["2-4 DETAILED bullets on the crypto market with figures (BTC/ETH levels & % moves from the data, ETF flows, dominance, catalysts)"],
       "coins": [{{"symbol": "BTC", "call": "buy|accumulate|hold|reduce|sell",
                   "rationale": "COMBINED view for THIS coin: reconcile its price action + technicals with crypto news and market context, 1-2 sentences with figures. Cover EVERY coin present in the CRYPTO data, not just one or two."}}]}},
   "topics": [{{"topic": "semiconductor industry", "sentiment": "...",
-      "summary": "a DETAILED paragraph (3-5 sentences) on the industry/market implication, citing specific figures (company moves %, revenue/deal numbers, analyst targets) from the data",
+      "summary": "3-5 DETAILED bullet lines (each starting '- ') on the industry/market implication, citing specific figures (company moves %, revenue/deal numbers, analyst targets) from the data",
       "key_companies": [{{"name": "TSMC", "note": "1-2 sentences: why this (non-portfolio) company's news matters, with figures if available"}}]}}],
-  "macro": {{"summary": "a DETAILED paragraph (4-6 sentences) on the macro backdrop, explicitly citing the MARKET FLAGS figures (Brent/WTI oil, gold, dollar/DXY, S&P 500 & Nasdaq levels and % moves, 10Y yield) and any rates/inflation/jobs news",
+  "macro": {{"summary": "4-6 DETAILED bullet lines (each starting '- ') on the macro backdrop, explicitly citing the MARKET FLAGS figures (Brent/WTI oil, gold, dollar/DXY, S&P 500 & Nasdaq levels and % moves, 10Y yield) and any rates/inflation/jobs news",
       "points": ["3-5 bullets, each with a concrete figure or level"],
       "watch": ["upcoming catalyst or data release with date if known"]}}{weekly_block}
 }}
@@ -487,7 +493,10 @@ def run_debates(analysis, watch_analysis, funds, extras, items, config):
     if not targets:
         return
     print(f"[debate] running bull/bear/judge on {len(targets)} name(s) (scope={scope})…")
-    for tk, name, sdict in targets:
+    import time
+    for i, (tk, name, sdict) in enumerate(targets):
+        if i:
+            time.sleep(3)  # space the 3-call bursts out — free tiers are per-minute
         ctx = _debate.build_context(tk, name, funds.get(tk), techs.get(tk),
                                     crowd.get(tk), by_tk.get(tk, []), prior=sdict)
         res = _debate.run(tk, name, ctx, config)
