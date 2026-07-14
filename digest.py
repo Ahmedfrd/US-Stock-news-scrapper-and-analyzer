@@ -80,8 +80,9 @@ def _prose(text, fs="15px", color="#3c4043"):
     multi-line text becomes a bullet list; single-line text stays a sentence.
     Heuristic-path plain sentences pass through unchanged."""
     if not text: return ""
-    lines=[l.strip().lstrip("-•–· ").strip() for l in str(text).splitlines() if l.strip()]
-    lines=[l for l in lines if l]
+    lines=[l.strip().lstrip("-•–·* ").strip() for l in str(text).splitlines() if l.strip()]
+    # drop empty lines and junk bullets that are just a bare number (model slip)
+    lines=[l for l in lines if l and not l.replace(".","").replace("-","").isdigit()]
     if not lines: return ""
     if len(lines)==1:
         return f'<div style="font-size:{fs};color:{color};margin:4px 0">{_esc(lines[0])}</div>'
