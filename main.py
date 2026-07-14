@@ -55,12 +55,14 @@ def is_weekly(config, forced):
     return _WEEKDAYS[dt.date.today().weekday()] == config.get("weekly_sector_day","Fri")
 
 def is_market_day(config, args):
-    """The Market Digest is weekly (market_digest_day, UTC); the Portfolio Digest
-    stays on every scheduled run. Manual runs (workflow_dispatch / --dry-run /
-    --force-market) always produce both so testing is predictable."""
+    """Market Digest cadence: 'daily' (the default) sends it every run; set
+    market_digest_day to a UTC weekday name (e.g. Thu) to make it weekly.
+    Manual runs (workflow_dispatch / --dry-run / --force-market) always
+    produce it so testing is predictable."""
+    day = str(config.get("market_digest_day", "daily") or "daily").strip()
+    if day.lower() == "daily": return True
     if args.dry_run or args.force_market: return True
     if os.environ.get("GITHUB_EVENT_NAME","") == "workflow_dispatch": return True
-    day = config.get("market_digest_day", config.get("weekly_sector_day","Thu"))
     return _WEEKDAYS[dt.date.today().weekday()] == day
 
 def _market_flags(instruments):
@@ -109,7 +111,7 @@ def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="
     if data["fund"].is_etf:
         prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=peers)
         data["etf"] = prof
-        for h in prof.holdings[:5]:
+        for h in prof.holdings[:8]:
             arts = _news_for(h.symbol, h.symbol, lookback, 4)
             if arts: data["holding_news"][h.symbol] = arts
     return data
@@ -156,9 +158,8 @@ def main():
     weekly = is_weekly(config, args.weekly)
     make_market = is_market_day(config, args)
     if not make_market:
-        print(f"[market] Market Digest runs weekly (market_digest_day: "
-              f"{config.get('market_digest_day', config.get('weekly_sector_day','Thu'))} UTC) "
-              f"— today is Portfolio Digest only.")
+        print(f"[market] Market Digest is set to weekly (market_digest_day: "
+              f"{config.get('market_digest_day')} UTC) — today is Portfolio Digest only.")
     benchmark = config.get("etf_benchmark", "SPY")
     lookback = int(config.get("sources", {}).get("lookback_hours", 24))
     max_items = int(config.get("sources", {}).get("max_items_per_query", 8))
@@ -193,7 +194,7 @@ def main():
             if funds.get(tk) and funds[tk].is_etf:
                 prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=s.get("peers"))
                 etf_profiles[tk] = prof
-                for h in prof.holdings[:5]:
+                for h in prof.holdings[:8]:
                     arts = _news_for(h.symbol, h.symbol, lookback, 4)
                     if arts: etf_hnews.setdefault(tk, {})[h.symbol] = arts
 

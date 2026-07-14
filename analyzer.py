@@ -198,15 +198,17 @@ SYSTEM = (
     "get fundamentals (or fund holdings for ETFs), factor scores, a news-tone reading, "
     "CROWD sentiment (Reddit), any earnings event, a SEC filing excerpt when available, "
     "TECHNICAL indicators (RSI, MACD, moving averages, ATR, volume, support/resistance "
-    "with a rules-based signal), and today's headlines. Do these well: (1) judge "
-    "the IMPACT of news on the company using its financials; (2) give a TECHNICAL "
-    "read (buy/hold/sell) that is YOUR interpretation of the indicators — you may "
-    "override the rule-based signal with reasoning; (3) give a COMBINED call that "
-    "reconciles your technical read + fundamentals + news catalysts, explaining "
-    "agreement or conflict; (4) from ALL the day's headlines "
-    "across the watchlist, macro and topics, identify the SECTORS affected, the effect, "
-    "and a bullish/bearish call with reasons — plus specific STOCKS TO WATCH (may be "
-    "outside the portfolio) with a one-line why. For ETFs analyse at the fund level. "
+    "with a rules-based signal), and today's headlines. The reader's TOP priority is "
+    "STAYING ON TOP OF THE NEWS: what happened to each name (and to an ETF's major "
+    "holdings) and what it concretely means — make summaries and news_impact the most "
+    "detailed, specific parts of your output, citing the actual headlines. Do these "
+    "well: (1) judge the IMPACT of news on the company using its financials; (2) give "
+    "a TECHNICAL read (buy/hold/sell) that is YOUR interpretation of the indicators — "
+    "you may override the rule-based signal with reasoning; (3) from ALL the day's "
+    "headlines across the watchlist, macro and topics, identify the SECTORS affected, "
+    "the effect, and a bullish/bearish call with reasons — plus specific STOCKS TO "
+    "WATCH (may be outside the portfolio) with a one-line why. For ETFs analyse at "
+    "the fund level. "
     "Use ONLY the data provided; never invent numbers. Be SPECIFIC and QUANTITATIVE — "
     "cite concrete figures (price %, index/commodity levels from the market flags, deal "
     "sizes, targets) in the macro, sector and industry sections. FORMAT: write every "
@@ -240,13 +242,11 @@ def _instructions(tickers, topics, weekly, shariah=False):
     {{"ticker": "AAPL",
       "impact": "high|medium|low",
       "sentiment": "bullish|bearish|neutral|mixed",
-      "summary": "2-3 bullet lines (each starting '- '): what happened AND the implication given fundamentals/valuation",
+      "summary": "3-5 bullet lines (each starting '- '): the day's NEWS on this name — what happened, per headline, AND the implication given fundamentals/valuation. Be detailed and specific; this is the heart of the report",
       "news_impact": "the concrete effect of today's news on THIS company's financials/outlook/competitive position — cite the specific headline and the specific financial consequence; empty string if no material news",
       "fundamental_read": "1 sentence on financial standing (for an ETF: what the fund holds / its tilt)",
       "divergence": "mismatch between news, price move, fundamentals — or empty string",
       "crowd_note": "1 sentence on what retail/Reddit sentiment says vs the fundamentals — or empty string",
-      "bull": "one-line bull case",
-      "bear": "one-line bear case",
       "earnings": {{"result": "beat/miss/inline with the numbers, or empty",
                     "outlook": "guidance/outlook from filing, or empty",
                     "management_review": "management's commentary from the filing, or empty"}},
@@ -258,8 +258,6 @@ def _instructions(tickers, topics, weekly, shariah=False):
                "holdings_news_impact": "news on major underlying holdings and its effect on those companies AND on the fund; else empty"}},
       "technical_read": {{"call": "buy|accumulate|hold|reduce|sell",
                "rationale": "YOUR interpretation of the technicals ALONE (RSI/MACD/moving averages/ATR/volume/support-resistance). You may agree or disagree with the rule-based signal provided — if you override it, say why (e.g. overbought RSI inside a strong uptrend is momentum, not a sell)"}},
-      "combined_call": {{"call": "buy|accumulate|hold|reduce|sell",
-               "rationale": "reconcile the TECHNICAL read, the fundamentals, and the news catalysts — say where they agree or conflict and why the call lands where it does"}},
       "key_drivers": ["short phrase"]}}
   ],
   "sector_highlights": [
@@ -290,6 +288,11 @@ ETFs/funds included; never omit a name.
 stocks_to_watch MUST be US-listed tickers only (NYSE/NASDAQ symbols) — never use
 foreign-exchange suffixes like .KS/.T/.AS/.DE/.PA/.L/.TO/.HK; if the catalyst concerns
 a foreign company, use its US-listed ADR (e.g. TSM, ASML) or leave it out.
+For stocks_to_watch, pick names the reader should GENUINELY consider trading on
+today's news — mid-caps are welcome, not just mega-caps. Prioritise a concrete
+near-term catalyst (earnings, guidance, upgrades/downgrades, deals, regulatory,
+product news) where the price change is actionable SHORT-TERM; long-term merit is
+a bonus, not a requirement.
 Only include topics/sectors that have data. Return STRICTLY valid JSON — no comments,
 no trailing commas. Keep it tight."""
 

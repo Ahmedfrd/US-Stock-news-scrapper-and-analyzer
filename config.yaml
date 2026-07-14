@@ -80,10 +80,10 @@ analysis:
 # Keep it a weekday if your schedule only runs Mon–Fri.
 weekly_sector_day: Thu   # Thu UTC = Friday morning HK time (see README)
 
-# The Market Digest is WEEKLY: it is built + emailed only on this UTC weekday
-# (the Portfolio Digest still goes out every scheduled run). Manual
-# "Run workflow" runs always produce both, so you can test any day.
-market_digest_day: Thu   # Thu UTC = Friday morning HK — same day as the sector deep-dive
+# Market Digest cadence: "daily" sends it on every scheduled run (alongside the
+# Portfolio Digest). Set a UTC weekday name (e.g. Thu) to make it weekly instead.
+# Manual "Run workflow" runs always produce both regardless.
+market_digest_day: daily
 
 delivery:
   method: email               # email | telegram | both | none

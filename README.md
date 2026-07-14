@@ -5,13 +5,13 @@ morning it scrapes finance + macro + crypto news, pulls the fundamentals,
 technicals, and crowd-sentiment data behind it, has a free AI analyse everything,
 and emails you **two reports** (all analysis written as scannable bullet points):
 
-- **📊 Portfolio Digest** *(every weekday)* — your holdings in depth, plus a
-  portfolio-wide look-through concentration view.
-- **🇺🇸 Market Digest US** *(weekly, on `market_digest_day` — default Thu UTC =
-  Friday morning HK; manual runs always include it)* — the general market:
-  global flags, detailed sector highlights, Shariah-screened *stocks to watch*
-  (US-listed only, each fully analysed like a holding), a major-coins crypto
-  section, industries & themes, and macro.
+- **📊 Portfolio Digest** — your holdings in depth, plus a portfolio-wide
+  look-through concentration view.
+- **🇺🇸 Market Digest US** — the general market: global flags, detailed sector
+  highlights, Shariah-screened *stocks to watch* (US-listed, large or mid cap,
+  picked for actionable near-term news catalysts, each fully analysed like a
+  holding), a major-coins crypto section, industries & themes, and macro.
+  Daily by default; set `market_digest_day` to a UTC weekday to make it weekly.
 
 Runs on GitHub's servers on a schedule. **Nothing runs on your own computer.**
 Everything is free (one optional key adds multi-source crowd sentiment).
@@ -33,9 +33,8 @@ Everything is free (one optional key adds multi-source crowd sentiment).
 - **A full card per holding** (stock or ETF) — see below.
 - **Macro backdrop** — detailed paragraph + figure-cited bullets + watch list.
 
-### 🇺🇸 Market Digest US (weekly)
-- Built + emailed once a week, on `market_digest_day` (UTC weekday, default
-  Thu). Manual **Run workflow** runs always produce it for testing.
+### 🇺🇸 Market Digest US
+- Daily by default; set `market_digest_day` to a UTC weekday for weekly.
 - **Market overview** + **global market flags**.
 - **Sector highlights** — sectors affected by the day's news flow, each
   bullish/bearish/neutral with 3–5 detailed, figure-cited bullets.
@@ -51,25 +50,32 @@ Everything is free (one optional key adds multi-source crowd sentiment).
 - **Macro** — detailed paragraph, figure bullets, upcoming catalysts.
 
 ### The per-name card (holdings and stocks-to-watch get identical treatment)
-Price + move · news tone · **multi-source crowd sentiment panel** (Adanos:
-Reddit · X · News · Polymarket — per-source bullish/neutral/bearish stacked bars,
-buzz, trend, and a blended consensus) · impact & sentiment badges · factor
-scores (Value / Growth / Profit / Momentum / Health + composite) · valuation,
-growth, margins, analyst target, next earnings · a highlighted
-**news-impact-on-the-company** read · earnings & outlook with management
-commentary from SEC filings · divergence flag · bull/bear cases · **technical
-analysis** (RSI, MACD, ATR, SMA/EMA, volume, support/resistance) shown three
-ways: the **rule-based signal** (deterministic reference), the **technical read**
-(the AI's own call from the technicals, which may override the rules with
-reasoning), and the **combined call** (the AI's final buy/accumulate/hold/
-reduce/sell from technicals + fundamentals + news) · collapsible source links
-(full articles are read, not just headlines).
+News first, noise last — in this order:
+1. **Header** — price + move · news tone · crowd consensus one-liner (with
+   total mention count) · impact & sentiment badges.
+2. **The news** — a detailed bulleted read of the day's headlines on the name,
+   plus a highlighted **news-impact-on-the-company** box and a divergence flag.
+3. **Crowd sentiment panel** (Adanos: Reddit · X · News · Polymarket) —
+   per-source bullish/neutral/bearish stacked bars, buzz, **mentions** (how many
+   people are actually talking, so you can judge whether the %s represent a big
+   population), trend, and a blended consensus.
+4. **Technical analysis** — RSI, MACD, ATR, SMA/EMA, volume,
+   support/resistance, the **rule-based signal** (deterministic reference) and
+   the **technical read** (the AI's own call, which may override the rules with
+   reasoning) in one box.
+5. **Fundamentals** — factor scores (Value / Growth / Profit / Momentum /
+   Health + composite), valuation, growth, margins, analyst target, next
+   earnings; earnings & outlook with management commentary from SEC filings.
+6. **Research verdict** — the 3-model bull/bear/judge debate.
+7. **Source articles** — a plain, always-visible list at the end of the card
+   (full articles are read, not just headlines).
 
 **ETF cards** additionally show: multi-horizon returns (1d→1y, YTD), risk
 (volatility, max drawdown, beta), NAV premium/discount, expense/yield/AUM,
 **move attribution by holding** (which components drove today's move, with a
 summed "explained move"), sector weights, vs-benchmark and vs-competitor-ETF
-tables, and news on the major underlying holdings.
+tables, and **news on the top-8 underlying holdings** — grouped per holding,
+always visible at the end of the card.
 
 ---
 
@@ -154,8 +160,8 @@ the emails or download the **digest** artifact (contains both HTML reports).
 - `crypto_watch` — major coins for the crypto section (`[]` disables).
 - `market_flags` — omit for defaults, `[]` to hide, or customise.
 - `weekly_sector_day` — UTC weekday for the weekly deep-dive (`Thu` = Friday-morning HK).
-- `market_digest_day` — UTC weekday the (weekly) Market Digest goes out
-  (defaults to `weekly_sector_day`); the Portfolio Digest goes out every run.
+- `market_digest_day` — `daily` (default) sends the Market Digest every run;
+  a UTC weekday name (e.g. `Thu`) makes it weekly instead.
 - `sources.*` — news toggles, `fetch_full_articles`, `relevance_filter`,
   `adanos_platforms` (`[reddit, x, news, polymarket]`), `lookback_hours`.
 - `analysis` — AI chain: gemini → groq → openrouter → heuristic.

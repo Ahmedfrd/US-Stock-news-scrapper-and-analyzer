@@ -95,6 +95,18 @@ def _chip(label,value,tone="neutral"):
             f'margin:3px 5px 3px 0;font-size:14px;color:#5f6368">{_esc(label)} '
             f'<b style="color:{c}">{value}</b></span>')
 
+def _mentions_total(cw):
+    """Sum of raw mention counts across sources (how many people are talking)."""
+    total = 0
+    for sv in (cw.get("sources") or {}).values():
+        try: total += int(float(sv.get("mentions") or 0))
+        except Exception: pass
+    return total
+
+def _fmt_mentions(m):
+    try: return f"{int(float(m)):,}"
+    except Exception: return str(m) if m is not None else "–"
+
 def _crowd_line(cw):
     """Compact one-liner: the blended consensus."""
     if not cw or not cw.get("has_data"):
@@ -105,6 +117,9 @@ def _crowd_line(cw):
         bits.append(f'{c["bullish"]}%▲ / {c["bearish"]}%▼ / {c["neutral"]}%–')
     if c.get("buzz") is not None:
         bits.append(f'buzz {c["buzz"]}')
+    ment = _mentions_total(cw)
+    if ment:
+        bits.append(f'{ment:,} mentions')
     src = list(cw.get("sources", {}).keys())
     if src:
         bits.append(f'({len(src)} sources)')
@@ -131,6 +146,7 @@ def _crowd_panel(cw):
             '<td style="padding:2px 8px">Bull / Neutral / Bear</td>'
             '<td style="text-align:right;padding:2px 8px">Split</td>'
             '<td style="text-align:right;padding:2px 8px">Buzz</td>'
+            '<td style="text-align:right;padding:2px 8px">Mentions</td>'
             '<td style="text-align:right;padding:2px 0">Trend</td></tr>')
     def row(name, sv, bold=False):
         b, n, br = sv.get("bullish"), sv.get("neutral"), sv.get("bearish")
@@ -141,11 +157,13 @@ def _crowd_panel(cw):
                 f'<td style="padding:3px 8px">{_stacked(b, n, br)}</td>'
                 f'<td style="text-align:right;padding:3px 8px;font-size:14px">{split}</td>'
                 f'<td style="text-align:right;padding:3px 8px;font-size:14px">{sv.get("buzz") if sv.get("buzz") is not None else "–"}</td>'
+                f'<td style="text-align:right;padding:3px 8px;font-size:14px;{w}">{_fmt_mentions(sv.get("mentions"))}</td>'
                 f'<td style="text-align:right;padding:3px 0;font-size:14px;color:#5f6368">{_esc(str(sv.get("trend") or "–"))}</td></tr>')
     for name, sv in cw.get("sources", {}).items():
         rows += row(name, sv)
     if c:
-        rows += row("Consensus", c, bold=True)
+        total = _mentions_total(cw)
+        rows += row("Consensus", {**c, "mentions": total or None}, bold=True)
     return _box('<div style="font-size:15px;font-weight:700;margin-bottom:5px">👥 Crowd sentiment '
                 '<span style="font-weight:400;color:#9aa0a6">— Adanos: Reddit · X · News · Polymarket</span></div>'
                 f'<table style="border-collapse:collapse;width:100%">{rows}</table>', bg="#fbfbfd")
@@ -187,6 +205,35 @@ def _links_block(items,label="Sources & full articles"):
             f'font-weight:600;user-select:none">▾ {label} ({len(uniq)}) — click to expand</summary>'
             f'<div style="margin-top:6px;padding-left:4px">{rows}</div></details>')
 
+def _links_list(items,label="Sources & full articles",limit=8,prefix_group=False):
+    """VISIBLE (non-collapsible) article list — email clients render <details>
+    unreliably, which hid the news. Used inside stock/ETF cards."""
+    if not items: return ""
+    seen=set(); uniq=[]
+    for it in items:
+        k=(it.title or "").strip().lower()
+        if not k or k in seen: continue
+        seen.add(k); uniq.append(it)
+    uniq=uniq[:limit]
+    if not uniq: return ""
+    rows=""
+    for it in uniq:
+        pre=f'<b>{_esc(it.group)}</b> · ' if (prefix_group and getattr(it,"group","")) else ""
+        rows+=(f'<div style="font-size:15px;margin:5px 0">• {pre}<a href="{_esc(it.url)}" '
+               f'style="color:#1a40b0;text-decoration:underline">{_esc(it.title)}</a> '
+               f'<span style="color:#9aa0a6">— {_esc(it.source)}</span></div>')
+    return (f'<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eef0f2">'
+            f'<div style="font-size:15px;font-weight:700;margin-bottom:2px">📰 {label} ({len(uniq)})</div>{rows}</div>')
+
+def _pts(lst):
+    """Clean an AI bullet array: drop empties and bare-number junk items."""
+    out=[]
+    for p in (lst or []):
+        t=str(p).strip().lstrip("-•–·* ").strip()
+        if t and not t.replace(".","").replace("-","").isdigit():
+            out.append(t)
+    return out
+
 def _banner(status):
     if status.get("ok"):
         return (f'<div style="background:#e6f6ec;border-left:4px solid #0a7d33;padding:9px 13px;'
@@ -221,8 +268,8 @@ def _legend():
       <div style="margin-bottom:4px"><b>Factor scores (0–100), higher = stronger:</b>
         <span style="color:#b3261e">0–33 weak</span> · <span style="color:#8a6d00">34–66 average</span> · <span style="color:#0a7d33">67–100 strong</span></div>
       <div>• <b>Value</b> cheapness (P/E, P/S, PEG) · <b>Growth</b> revenue/earnings · <b>Profit</b> margins/ROE · <b>Momentum</b> trend & 52-wk position · <b>Health</b> balance sheet · <b>Composite</b> average.</div>
-      <div style="margin-top:4px">• <b>News tone</b> headline wording (−1..+1) · <b>Crowd</b> Reddit retail (Adanos) · <b>Impact</b> materiality of today's news.</div>
-      <div style="margin-top:4px"><b>Technicals:</b> RSI (&gt;70 overbought, &lt;30 oversold) · MACD (momentum) · SMA/EMA (trend) · ATR (volatility) · Volume (confirmation) · support/resistance. <b>Rule-based signal</b> = deterministic reference. <b>Technical read</b> = the AI's call from the technicals. <b>Combined call</b> = the AI's call from technicals + fundamentals + news.</div>
+      <div style="margin-top:4px">• <b>News tone</b> headline wording (−1..+1) · <b>Crowd</b> Adanos multi-source (Reddit · X · News · Polymarket); <b>Mentions</b> = how many people are actually talking (judge whether the %s represent a big population) · <b>Impact</b> materiality of today's news.</div>
+      <div style="margin-top:4px"><b>Technicals:</b> RSI (&gt;70 overbought, &lt;30 oversold) · MACD (momentum) · SMA/EMA (trend) · ATR (volatility) · Volume (confirmation) · support/resistance. <b>Rule-based signal</b> = deterministic reference. <b>Technical read</b> = the AI's call from the technicals. <b>Research verdict</b> = the bull/bear/judge debate's synthesis.</div>
       <div style="margin-top:4px;color:#b3261e"><b>Not investment advice.</b> Signals/calls describe the current setup, not a recommendation or forecast. Do your own research.</div></div>""")
 
 def _footer():
@@ -293,7 +340,40 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     if is_etf: badges+=_pill("ETF / fund","#3367d6","#eef3fb")+"&nbsp;"
     if badges: H.append(f'<div style="margin-bottom:8px">{badges}</div>')
 
-    # metrics box
+    # ---- 1) NEWS — what happened and what it means (the point of the report) ----
+    H.append(f'<div style="margin-bottom:6px">{_prose(s.get("summary",""),fs="16px",color="#1a1a1a")}</div>')
+    if s.get("news_impact"):
+        H.append(_box(f'<b style="color:#3367d6">News impact on the company:</b>{_prose(s["news_impact"])}',bg="#eef3fb",border="#d5e2f7"))
+    if s.get("divergence"):
+        H.append(_box(f'⚡ <b>Divergence:</b> {_esc(s["divergence"])}',bg="#fdf5e0",border="#ecdca6"))
+
+    # ---- 2) CROWD sentiment ----
+    H.append(_crowd_panel(cw))
+    if not (cw and cw.get("has_data")):
+        st = extras.get("crowd_status")
+        if st == "no_key":
+            H.append('<div style="font-size:14px;color:#8a6d00;margin:2px 0">👥 Crowd sentiment off — set '
+                     '<b>ADANOS_API_KEY</b> (free at adanos.org) to enable Reddit · X · News · Polymarket sentiment.</div>')
+        elif st == "empty":
+            H.append('<div style="font-size:14px;color:#9aa0a6;margin:2px 0">👥 Crowd sentiment: no Adanos data for this name this run.</div>')
+        elif st == "pk_thin":
+            H.append('<div style="font-size:14px;color:#9aa0a6;margin:2px 0">👥 Crowd sentiment: no Reddit chatter found for this name (PSX discussion is thin; set REDDIT_CLIENT_ID/SECRET for reliable search).</div>')
+    if s.get("crowd_note"):
+        H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">👥 {_esc(s["crowd_note"])}</div>')
+
+    # ---- 3) TECHNICALS — rule-based indicators + the AI's technical read, together ----
+    tech=(extras.get("technicals") or {}).get(tk)
+    tr=s.get("technical_read") or {}
+    tech_inner=('<div style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368;margin-bottom:4px">Technical analysis</div>'
+                +_tech_panel(tech))
+    if tr.get("call"):
+        tech_inner+=(f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid #e9ecef">'
+                     f'<span style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368">Technical read</span>'
+                     f'{_call_pill(tr.get("call"))}<span style="font-size:13px;color:#9aa0a6">AI, technicals only</span></div>'
+                     f'<div style="margin-top:4px">{_prose(tr.get("rationale",""))}</div>')
+    H.append(_box(tech_inner))
+
+    # ---- 4) FUNDAMENTALS / fund data ----
     if is_etf and f:
         prof=(extras.get("etf") or {}).get(tk); r=(prof.returns if prof else {}) or {}
         left=_grid([("Returns",f"1d {_num(r.get('1d'),'%')} · 1w {_num(r.get('1w'),'%')} · 1m {_num(r.get('1m'),'%')} · 3m {_num(r.get('3m'),'%')}"),
@@ -354,24 +434,8 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
                      ("Next earnings",(f"{_esc(f.next_earnings)} ({f.days_to_earnings}d)" if f.next_earnings else "n/a"))])
         H.append(_box(f'<div style="display:flex;gap:20px;flex-wrap:wrap"><div style="flex:1;min-width:240px">{bars}</div><div style="flex:1;min-width:250px">{right}</div></div>'))
 
-    H.append(_debate_panel(s))
-    H.append(_crowd_panel(cw))
-    if not (cw and cw.get("has_data")):
-        st = extras.get("crowd_status")
-        if st == "no_key":
-            H.append('<div style="font-size:14px;color:#8a6d00;margin:2px 0">👥 Crowd sentiment off — set '
-                     '<b>ADANOS_API_KEY</b> (free at adanos.org) to enable Reddit · X · News · Polymarket sentiment.</div>')
-        elif st == "empty":
-            H.append('<div style="font-size:14px;color:#9aa0a6;margin:2px 0">👥 Crowd sentiment: no Adanos data for this name this run.</div>')
-        elif st == "pk_thin":
-            H.append('<div style="font-size:14px;color:#9aa0a6;margin:2px 0">👥 Crowd sentiment: no Reddit chatter found for this name (PSX discussion is thin; set REDDIT_CLIENT_ID/SECRET for reliable search).</div>')
-    H.append(f'<div style="margin-bottom:6px">{_prose(s.get("summary",""),fs="16px",color="#1a1a1a")}</div>')
-    if s.get("news_impact"):
-        H.append(_box(f'<b style="color:#3367d6">News impact on the company:</b>{_prose(s["news_impact"])}',bg="#eef3fb",border="#d5e2f7"))
     if s.get("fundamental_read"):
         H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">📊 {_esc(s["fundamental_read"])}</div>')
-    if s.get("crowd_note"):
-        H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">👥 {_esc(s["crowd_note"])}</div>')
 
     ed=s.get("earnings") or {}
     if any(ed.get(k) for k in ("result","outlook","management_review")):
@@ -387,34 +451,20 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
                         ("nav_read","NAV"),("vs_market","vs market"),("vs_peers","vs competitors"),("risks","Risks")]:
             if etf_an.get(key): inner+=f'<div style="margin:4px 0;font-size:15px"><b>{lab}:</b>{_prose(etf_an[key])}</div>'
         H.append(_box(inner,bg="#f4f6fb",border="#dde4f0"))
-        hn=(extras.get("etf_holding_news") or {}).get(tk,{})
-        all_h=[a for arts in hn.values() for a in arts]
-        if all_h: H.append(_links_block(all_h[:10],label="Underlying holdings — news"))
 
     fil=fils.get(tk)
     if fil: H.append(f'<div style="font-size:15px;margin-bottom:6px">📄 <a href="{_esc(fil["url"])}" style="color:#3367d6">{_esc(fil["form"])} filed {_esc(fil["filed"])}</a></div>')
-    if s.get("divergence"):
-        H.append(_box(f'⚡ <b>Divergence:</b> {_esc(s["divergence"])}',bg="#fdf5e0",border="#ecdca6"))
-    if s.get("bull") or s.get("bear"):
-        H.append(f'<div style="font-size:15px;margin-bottom:4px"><span style="color:#0a7d33">▲ Bull:</span> {_esc(s.get("bull",""))}<br>'
-                 f'<span style="color:#b3261e">▼ Bear:</span> {_esc(s.get("bear",""))}</div>')
 
-    tech=(extras.get("technicals") or {}).get(tk)
-    H.append(_box('<div style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368;margin-bottom:4px">Technical analysis</div>'+_tech_panel(tech)))
-    tr=s.get("technical_read") or {}
-    if tr.get("call"):
-        H.append(_box(f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-                      f'<span style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368">Technical read</span>'
-                      f'{_call_pill(tr.get("call"))}<span style="font-size:13px;color:#9aa0a6">AI, technicals only</span></div>'
-                      f'<div style="margin-top:6px">{_prose(tr.get("rationale",""))}</div>',bg="#fbfcfd"))
-    cc=s.get("combined_call") or {}
-    if cc.get("call"):
-        H.append(_box(f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-                      f'<span style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368">Combined call</span>'
-                      f'{_call_pill(cc.get("call"))}<span style="font-size:13px;color:#9aa0a6">AI: technicals + fundamentals + news</span></div>'
-                      f'<div style="margin-top:6px">{_prose(cc.get("rationale",""))}</div>',bg="#fbfbfd"))
+    # ---- 5) DEBATE — research verdict + bull vs bear ----
+    H.append(_debate_panel(s))
 
-    H.append(_links_block(by_group.get(tk, [])[:8]))
+    # ---- 6) NEWS ARTICLES — visible, at the end of the card ----
+    if is_etf:
+        hn=(extras.get("etf_holding_news") or {}).get(tk,{})
+        hitems=[a for arts in hn.values() for a in arts]
+        if hitems:
+            H.append(_links_list(hitems,label="News on major holdings",limit=16,prefix_group=True))
+    H.append(_links_list(by_group.get(tk, []),label="Sources & full articles",limit=8))
     H.append("</div>")
     return "".join(H)
 
@@ -496,10 +546,10 @@ def build_portfolio(analysis, items, funds, extras):
         B.append(_h2("Macro backdrop"))
         if macro.get("summary"):
             B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
-        for p in (macro.get("points") or [])[:6]:
+        for p in _pts(macro.get("points"))[:6]:
             B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {_esc(p)}</div>')
         if macro.get("watch"):
-            B.append('<div style="font-size:15px;color:#5f6368;margin-top:4px">Watch: '+" · ".join(_esc(w) for w in macro["watch"])+'</div>')
+            B.append('<div style="font-size:15px;color:#5f6368;margin-top:4px">Watch: '+" · ".join(_esc(w) for w in _pts(macro.get("watch")))+'</div>')
     B.append(_legend())
     html_body=_wrap(f"Portfolio Digest {region}",today,_banner(status),"".join(B))+_footer()
     # text
@@ -531,7 +581,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
     if sh:
         B.append(_h2("Sector highlights","from today's news flow"))
         for sec in sh:
-            pts="".join(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(p)}</div>' for p in (sec.get("points") or [])[:6])
+            pts="".join(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(p)}</div>' for p in _pts(sec.get("points"))[:6])
             B.append(_box(f'<div style="display:flex;justify-content:space-between;align-items:center">'
                           f'<span style="font-weight:700;font-size:17px">{_esc(sec.get("sector",""))}</span> {_sent_pill(sec.get("call"))}</div>{pts}'))
 
@@ -560,7 +610,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
         head = (f'<div style="display:flex;justify-content:space-between;align-items:center">'
                 f'<span style="font-weight:700;font-size:17px">Crypto market</span> {_sent_pill(ch.get("call"))}</div>')
         pts = "".join(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(p)}</div>'
-                      for p in (ch.get("points") or [])[:5])
+                      for p in _pts(ch.get("points"))[:5])
         rows = ""
         for sym in order[:10]:
             c = ai_coins.get(sym, {})
@@ -607,7 +657,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
         for sec in sectors:
             name=sec.get("sector","")
             inner=f'<div style="font-weight:700;font-size:17px">{_esc(name)}</div>{_prose(sec.get("summary",""))}'
-            for d in (sec.get("developments") or []): inner+=f'<div style="font-size:15px;margin:2px 0">• {_esc(d)}</div>'
+            for d in _pts(sec.get("developments")): inner+=f'<div style="font-size:15px;margin:2px 0">• {_esc(d)}</div>'
             if sec.get("read_across"): inner+=f'<div style="font-size:15px;color:#5f6368;margin-top:4px">Read-across: {_esc(sec["read_across"])}</div>'
             inner+=_links_block(sec_news.get(name, [])[:5])
             B.append(_box(inner))
@@ -616,9 +666,9 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
     if macro.get("summary") or macro.get("points") or macro_items:
         B.append(_h2("Macro"))
         if macro.get("summary"): B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
-        for p in (macro.get("points") or [])[:6]:
+        for p in _pts(macro.get("points"))[:6]:
             B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {_esc(p)}</div>')
-        if macro.get("watch"): B.append('<div style="font-size:15px;color:#5f6368;margin:6px 0">Watch: '+" · ".join(_esc(w) for w in macro["watch"])+'</div>')
+        if macro.get("watch"): B.append('<div style="font-size:15px;color:#5f6368;margin:6px 0">Watch: '+" · ".join(_esc(w) for w in _pts(macro.get("watch")))+'</div>')
         B.append(_links_block(macro_items[:8]))
     B.append(_legend())
     html_body=_wrap(("Weekly " if weekly else "")+f"Market Digest {region}",today,_banner(status),"".join(B))+_footer()
@@ -628,7 +678,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
         T.append("\nSECTOR HIGHLIGHTS:")
         for sec in sh:
             T.append(f"\n{sec.get('sector','')} [{(sec.get('call') or '').upper()}]")
-            for p in (sec.get("points") or [])[:4]: T.append(f"  • {p}")
+            for p in _pts(sec.get("points"))[:4]: T.append(f"  • {p}")
     if ws:
         T.append("\nSTOCKS TO WATCH (full analysis):")
         for s in ws: T+=_stock_text(s.get("ticker"),s,funds,extras,by_group)
@@ -645,17 +695,16 @@ def _stock_text(tk,s,funds,extras,by_group):
     tone=(f"news tone {sg.get('score','n/a')} ({sg.get('label','n/a')})"
           + (" [from holdings news]" if sg.get("basis")=="holdings" else "")) if sg.get("n") \
          else "news tone: no direct news this run"
+    ment=_mentions_total(cw or {})
     L.append(f"  {tone}; "
              f"crowd {con.get('label','n/a')} ({con.get('bullish','n/a')}% bull / {con.get('bearish','n/a')}% bear, "
-             f"buzz {con.get('buzz','n/a')}, {len((cw or {}).get('sources',{}))} sources)")
+             f"buzz {con.get('buzz','n/a')}, {ment} mentions, {len((cw or {}).get('sources',{}))} sources)")
     L.append(f"  {s.get('summary','')}")
     if s.get("news_impact"): L.append(f"  NEWS IMPACT: {s['news_impact']}")
     tech=(extras.get("technicals") or {}).get(tk)
     if tech and not tech.error: L.append(f"  TECHNICALS: {tech.signal.upper()} | RSI {tech.rsi} | MACD {tech.macd_hist} | trend {tech.trend} | S/R {tech.support}/{tech.resistance}")
-    cc=s.get("combined_call") or {}
     tr=s.get("technical_read") or {}
     if tr.get("call"): L.append(f"  TECHNICAL READ (AI): {tr['call'].upper()} — {tr.get('rationale','')}")
-    if cc.get("call"): L.append(f"  COMBINED CALL (AI): {cc['call'].upper()} — {cc.get('rationale','')}")
     for it in by_group.get(tk, [])[:5]: L.append(f"  • {it.title} — {it.source}\n    {it.url}")
     return L
 
@@ -668,7 +717,7 @@ def _debate_panel(s):
         return ""
     conv = (v.get("conviction") or "").lower()
     conv_col = {"high": "#0a7d33", "medium": "#8a6d00", "low": "#9aa0a6"}.get(conv, "#5f6368")
-    risks = "".join(f'<li style="margin:2px 0">{_esc(r)}</li>' for r in (v.get("key_risks") or [])[:3])
+    risks = "".join(f'<li style="margin:2px 0">{_esc(r)}</li>' for r in _pts(v.get("key_risks"))[:3])
     extra = ""
     if v.get("start_here"):
         extra += f'<div style="font-size:14px;margin-top:6px"><b>Start here:</b> {_esc(v["start_here"])}</div>'
