@@ -277,7 +277,8 @@ def _instructions(tickers, topics, weekly, shariah=False):
       "key_companies": [{{"name": "TSMC", "note": "1-2 sentences: why this (non-portfolio) company's news matters, with figures if available"}}]}}],
   "macro": {{"summary": "4-6 DETAILED bullet lines (each starting '- ') on the macro backdrop, explicitly citing the MARKET FLAGS figures (Brent/WTI oil, gold, dollar/DXY, S&P 500 & Nasdaq levels and % moves, 10Y yield) and any rates/inflation/jobs news",
       "points": ["3-5 bullets, each with a concrete figure or level"],
-      "watch": ["upcoming catalyst or data release with date if known"]}}{weekly_block}
+      "risks": ["3-5 forward-looking risks: the concrete trigger (an escalation, a data print, a policy decision) and what it would do to markets — one risk per line, specific not generic"],
+      "watch": ["upcoming catalysts/data releases the reader should watch for, one per line, each phrased as 'date/time (if known): what happens', e.g. '15-Jul, 8:30am ET: US CPI print' — from the news/macro data provided, not invented"]}}{weekly_block}
 }}
 
 Stocks: {', '.join(tickers)}
@@ -408,7 +409,7 @@ def _heuristic(items, funds, extras, watchlist):
     result = {"market_overview": "Automated read (no LLM): VADER news tone + crowd buzz + "
               "computed factor scores + rule-based technical signals + earnings flags.",
               "priority": prio, "stocks": stocks, "topics": topics,
-              "macro": {"summary": "See macro headlines below.", "watch": []},
+              "macro": {"summary": "See macro headlines below.", "risks": [], "watch": []},
               "sector_highlights": [],
               "crypto_highlight": _heur_crypto(extras.get("crypto") or {}),
               "stocks_to_watch": [{"ticker": s["ticker"], "call": s["sentiment"],

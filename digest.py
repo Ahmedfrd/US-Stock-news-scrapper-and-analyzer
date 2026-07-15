@@ -262,6 +262,22 @@ def _flags_row(flags):
     return (f'<div style="margin-bottom:18px">{_h2("Global market flags")}'
             f'<table style="border-collapse:collapse;width:100%"><tr>{cells}</tr></table></div>')
 
+def _risks_and_events(macro):
+    """Report-level 'Risks' + 'Key Upcoming Events' — bulleted, at the end of
+    the report, one line per item (not the old inline 'Watch: a · b · c')."""
+    B=[]
+    risks=_pts(macro.get("risks"))
+    if risks:
+        B.append(_h2("Risks"))
+        for r in risks[:6]:
+            B.append(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(r)}</div>')
+    watch=_pts(macro.get("watch"))
+    if watch:
+        B.append(_h2("Key Upcoming Events"))
+        for w in watch[:8]:
+            B.append(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(w)}</div>')
+    return "".join(B)
+
 def _legend():
     return ("""<div style="margin-top:24px;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:14px 16px;font-size:15px;color:#3c4043">
       <div style="font-weight:700;margin-bottom:6px;font-size:16px">How to read this report</div>
@@ -347,14 +363,15 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     if s.get("divergence"):
         H.append(_box(f'⚡ <b>Divergence:</b> {_esc(s["divergence"])}',bg="#fdf5e0",border="#ecdca6"))
 
-    # For an ETF the news IS the point — put its constituents' news AND the fund's
-    # own news right here at the top, visible (not buried at the bottom).
-    if is_etf:
-        hn=(extras.get("etf_holding_news") or {}).get(tk,{})
-        hitems=[a for arts in hn.values() for a in arts]
-        if hitems:
-            H.append(_links_list(hitems,label="News on major holdings",limit=16,prefix_group=True))
-        H.append(_links_list(by_group.get(tk, []),label="ETF / fund news",limit=8))
+    # For an ETF the news IS the point — the SUMMARY of what its holdings' news
+    # means for the fund goes up here too (prose, not raw article links — those
+    # stay at the end of the card with the rest of the sources).
+    etf_an=s.get("etf") or {}
+    if is_etf and (etf_an.get("move_explainer") or etf_an.get("holdings_news_impact")):
+        inner=""
+        for key,lab in [("move_explainer","What moved it today"),("holdings_news_impact","Holdings news & impact")]:
+            if etf_an.get(key): inner+=f'<div style="margin:4px 0;font-size:15px"><b>{lab}:</b>{_prose(etf_an[key])}</div>'
+        H.append(_box(inner,bg="#eef3fb",border="#d5e2f7"))
 
     # ---- 2) CROWD sentiment ----
     H.append(_crowd_panel(cw))
@@ -453,11 +470,9 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
             if ed.get(k): inner+=f'<div style="font-size:15px"><b>{lab}:</b> {_esc(ed[k])}</div>'
         H.append(_box(inner,bg="#f1f7f1",border="#d5ead5"))
 
-    etf_an=s.get("etf") or {}
-    if is_etf and any(etf_an.get(k) for k in etf_an):
+    if is_etf and any(etf_an.get(k) for k in ("nav_read","vs_market","vs_peers","risks")):
         inner='<div style="font-weight:700;color:#3367d6;margin-bottom:4px;font-size:15px">Fund analysis</div>'
-        for key,lab in [("move_explainer","What moved it today"),("holdings_news_impact","Holdings news & impact"),
-                        ("nav_read","NAV"),("vs_market","vs market"),("vs_peers","vs competitors"),("risks","Risks")]:
+        for key,lab in [("nav_read","NAV"),("vs_market","vs market"),("vs_peers","vs competitors"),("risks","Risks")]:
             if etf_an.get(key): inner+=f'<div style="margin:4px 0;font-size:15px"><b>{lab}:</b>{_prose(etf_an[key])}</div>'
         H.append(_box(inner,bg="#f4f6fb",border="#dde4f0"))
 
@@ -467,9 +482,14 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     # ---- 5) DEBATE — research verdict + bull vs bear ----
     H.append(_debate_panel(s))
 
-    # ---- 6) NEWS ARTICLES — for a single stock, visible at the end of the card.
-    #        (ETF cards already show holdings + fund news at the top.) ----
-    if not is_etf:
+    # ---- 6) NEWS ARTICLES — visible, at the end of the card ----
+    if is_etf:
+        hn=(extras.get("etf_holding_news") or {}).get(tk,{})
+        hitems=[a for arts in hn.values() for a in arts]
+        if hitems:
+            H.append(_links_list(hitems,label="News on major holdings",limit=16,prefix_group=True))
+        H.append(_links_list(by_group.get(tk, []),label="ETF / fund news",limit=8))
+    else:
         H.append(_links_list(by_group.get(tk, []),label="Sources & full articles",limit=8))
     H.append("</div>")
     return "".join(H)
@@ -554,8 +574,7 @@ def build_portfolio(analysis, items, funds, extras):
             B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
         for p in _pts(macro.get("points"))[:6]:
             B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {_esc(p)}</div>')
-        if macro.get("watch"):
-            B.append('<div style="font-size:15px;color:#5f6368;margin-top:4px">Watch: '+" · ".join(_esc(w) for w in _pts(macro.get("watch")))+'</div>')
+    B.append(_risks_and_events(macro))
     B.append(_legend())
     html_body=_wrap(f"Portfolio Digest {region}",today,_banner(status),"".join(B))+_footer()
     # text
@@ -674,8 +693,8 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
         if macro.get("summary"): B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
         for p in _pts(macro.get("points"))[:6]:
             B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {_esc(p)}</div>')
-        if macro.get("watch"): B.append('<div style="font-size:15px;color:#5f6368;margin:6px 0">Watch: '+" · ".join(_esc(w) for w in _pts(macro.get("watch")))+'</div>')
         B.append(_links_block(macro_items[:8]))
+    B.append(_risks_and_events(macro))
     B.append(_legend())
     html_body=_wrap(("Weekly " if weekly else "")+f"Market Digest {region}",today,_banner(status),"".join(B))+_footer()
 

@@ -31,7 +31,8 @@ Everything is free (one optional key adds multi-source crowd sentiment).
   allocation; otherwise equal weight is assumed (and stated).
 - **What matters today** — holdings ranked by materiality of the day's news.
 - **A full card per holding** (stock or ETF) — see below.
-- **Macro backdrop** — detailed paragraph + figure-cited bullets + watch list.
+- **Macro backdrop** — detailed paragraph + figure-cited bullets, then **Risks**
+  and **Key Upcoming Events** as bulleted closing sections.
 
 ### 🇺🇸 Market Digest US
 - Daily by default; set `market_digest_day` to a UTC weekday for weekly.
@@ -47,7 +48,9 @@ Everything is free (one optional key adds multi-source crowd sentiment).
 - **Industries & themes** — your topics as detailed paragraphs, with key
   non-portfolio companies driving each.
 - **Weekly sector deep-dive** (once a week) with read-across to your holdings.
-- **Macro** — detailed paragraph, figure bullets, upcoming catalysts.
+- **Macro** — detailed paragraph, figure bullets, then **Risks** and **Key
+  Upcoming Events** as bulleted closing sections (each event/risk one line,
+  e.g. "15-Jul, 8:30am ET: US CPI print").
 
 ### The per-name card (holdings and stocks-to-watch get identical treatment)
 News first, noise last — in this order:
@@ -55,6 +58,9 @@ News first, noise last — in this order:
    total mention count) · impact & sentiment badges.
 2. **The news** — a detailed bulleted read of the day's headlines on the name,
    plus a highlighted **news-impact-on-the-company** box and a divergence flag.
+   For an ETF, the news summary of what its underlying holdings did today and
+   what it means for the fund ("what moved it" + "holdings news & impact")
+   appears here too — as prose, not a raw article dump.
 3. **Crowd sentiment panel** (Adanos: Reddit · X · News · Polymarket) —
    per-source bullish/neutral/bearish stacked bars, buzz, **mentions** (how many
    people are actually talking, so you can judge whether the %s represent a big
@@ -68,17 +74,16 @@ News first, noise last — in this order:
    earnings; earnings & outlook with management commentary from SEC filings.
 6. **Research verdict** — the 3-model bull/bear/judge debate.
 7. **Source articles** — a plain, always-visible list at the end of the card
-   (full articles are read, not just headlines). *ETF cards instead show their
-   constituents' news and the fund's own news at the TOP of the card — see below.*
+   (full articles are read, not just headlines).
 
 **ETF cards** additionally show: multi-horizon returns (1d→1y, YTD), risk
 (volatility, max drawdown, beta), NAV premium/discount, expense/yield/AUM,
 **move attribution by holding** (which components drove today's move, with a
 summed "explained move"), sector weights, vs-benchmark and vs-competitor-ETF
-tables. **News on the top-8 underlying holdings (queried by company name, so
-foreign constituents like Samsung/SK Hynix are covered), grouped per holding,
-plus the fund's own news — shown at the TOP of the card**, since staying on top
-of constituent news is the whole point.
+tables. News on the top-8 underlying holdings is queried by company name (so
+foreign constituents like Samsung/SK Hynix are covered properly), grouped per
+holding, plus the fund's own news — both shown as visible link lists at the
+end of the card, same as a regular stock.
 
 ---
 
