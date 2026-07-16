@@ -111,9 +111,11 @@ def _build_context(items, funds, extras, watchlist) -> str:
             hn = (extras.get("etf_holding_news") or {}).get(tk, {})
             for sym, arts in hn.items():
                 if arts:
-                    out.append(f"  news on holding {sym}:")
+                    out.append(f"  news on holding {sym} (read the content for the actual "
+                               f"reason behind its move, not just the headline):")
                     for a in arts[:4]:
-                        out.append(f"    - {a.title} [{a.source}]")
+                        snip = (a.summary[:700] + "…") if len(a.summary or "") > 700 else (a.summary or "")
+                        out.append(f"    - {a.title} [{a.source}]" + (f"\n      {snip}" if snip else ""))
         elif f:
             out.append(_fund_block(f))
         sg = sent.get(tk)
@@ -155,8 +157,8 @@ def _build_context(items, funds, extras, watchlist) -> str:
             out.append(f"  LATEST SEC FILING {fil['form']} filed {fil['filed']} — excerpt:")
             out.append(f"    \"{fil['excerpt'][:2500]}\"")
         for it in by_group.get(tk, [])[:10]:
-            snip = (it.summary[:180] + "…") if len(it.summary) > 180 else it.summary
-            out.append(f"    - {it.title} [{it.source}] {snip}")
+            snip = (it.summary[:900] + "…") if len(it.summary) > 900 else it.summary
+            out.append(f"    - {it.title} [{it.source}]" + (f"\n      {snip}" if snip else ""))
 
     for t in watchlist.get("topics", []):
         out.append(f"\n=== TOPIC: {t} ===")
@@ -198,10 +200,17 @@ SYSTEM = (
     "get fundamentals (or fund holdings for ETFs), factor scores, a news-tone reading, "
     "CROWD sentiment (Reddit), any earnings event, a SEC filing excerpt when available, "
     "TECHNICAL indicators (RSI, MACD, moving averages, ATR, volume, support/resistance "
-    "with a rules-based signal), and today's headlines. The reader's TOP priority is "
+    "with a rules-based signal), and today's headlines — where available, the FULL "
+    "ARTICLE TEXT follows the headline, not just the title. The reader's TOP priority is "
     "STAYING ON TOP OF THE NEWS: what happened to each name (and to an ETF's major "
     "holdings) and what it concretely means — make summaries and news_impact the most "
-    "detailed, specific parts of your output, citing the actual headlines. Do these "
+    "detailed, specific parts of your output. READ THE ARTICLE CONTENT, not just the "
+    "headline, and extract the actual reason behind any move: the specific deal size, "
+    "lawsuit amount, guidance number, regulatory action, analyst target change, or "
+    "management quote that explains WHY — never write things like 'reported in headlines "
+    "like X' or 'boosted by positive news' as a substitute for the real reason; if the "
+    "article content doesn't explain the move, say what IS known and that the driver is "
+    "unclear, rather than restating the headline as if it were the explanation. Do these "
     "well: (1) judge the IMPACT of news on the company using its financials; (2) give "
     "a TECHNICAL read (buy/hold/sell) that is YOUR interpretation of the indicators — "
     "you may override the rule-based signal with reasoning; (3) from ALL the day's "
@@ -242,8 +251,8 @@ def _instructions(tickers, topics, weekly, shariah=False):
     {{"ticker": "AAPL",
       "impact": "high|medium|low",
       "sentiment": "bullish|bearish|neutral|mixed",
-      "summary": "3-5 bullet lines (each starting '- '): the day's NEWS on this name — what happened, per headline, AND the implication given fundamentals/valuation. Be detailed and specific; this is the heart of the report",
-      "news_impact": "the concrete effect of today's news on THIS company's financials/outlook/competitive position — cite the specific headline and the specific financial consequence; empty string if no material news",
+      "summary": "3-5 bullet lines (each starting '- '): the day's NEWS on this name — the SUBSTANCE from the article content (the deal size, guidance number, lawsuit amount, regulatory action, analyst call, management quote — whatever concretely explains what happened), not the headline restated, AND the implication given fundamentals/valuation. Be detailed and specific; this is the heart of the report",
+      "news_impact": "the concrete effect of today's news on THIS company's financials/outlook/competitive position, grounded in specific facts from the article body (figures, terms, dates) — not a paraphrase of the headline; empty string if no material news",
       "fundamental_read": "1 sentence on financial standing (for an ETF: what the fund holds / its tilt)",
       "divergence": "mismatch between news, price move, fundamentals — or empty string",
       "crowd_note": "1 sentence on what retail/Reddit sentiment says vs the fundamentals — or empty string",
@@ -255,7 +264,7 @@ def _instructions(tickers, topics, weekly, shariah=False):
                "vs_market": "how it's performing vs the benchmark across horizons; else empty",
                "vs_peers": "how it compares to the peer ETFs (returns/expense/yield/size); else empty",
                "risks": "key risks: concentration, volatility, sector/rate sensitivity, beta; else empty",
-               "holdings_news_impact": "news on major underlying holdings and its effect on those companies AND on the fund; else empty"}},
+               "holdings_news_impact": "for EACH major holding with news, the actual SUBSTANCE from its article content (what specifically happened — a product launch, earnings beat/miss with numbers, a lawsuit, a downgrade — and why) and how that concretely feeds through to the fund; never just 'holding X was up/down Y%' or a restated headline — else empty"}},
       "technical_read": {{"call": "buy|accumulate|hold|reduce|sell",
                "rationale": "YOUR interpretation of the technicals ALONE (RSI/MACD/moving averages/ATR/volume/support-resistance). You may agree or disagree with the rule-based signal provided — if you override it, say why (e.g. overbought RSI inside a strong uptrend is momentum, not a sell)"}},
       "key_drivers": ["short phrase"]}}

@@ -21,6 +21,7 @@ or no AI key is present.
 from __future__ import annotations
 
 import providers
+import analyzer as _analyzer
 
 # Default role→provider assignment (overridable via analysis.debate_providers).
 _DEFAULT_ROLES = {"bull": "groq", "bear": "openrouter", "judge": "gemini"}
@@ -72,22 +73,14 @@ def build_context(ticker, name, fund, tech, crowd_entry, news_items, prior=None)
     """Compact per-name evidence block shared by all three roles."""
     L = [f"SECURITY: {ticker} ({name})"]
     if fund and not getattr(fund, "error", None):
-        sc = getattr(fund, "scores", {}) or {}
-        L.append("FUNDAMENTALS: " + ", ".join(filter(None, [
-            f"price {fund.price}" if fund.price is not None else "",
-            f"1d {fund.change_1d:+.2f}%" if getattr(fund, "change_1d", None) is not None else "",
-            f"P/E {fund.pe}" if getattr(fund, "pe", None) else "",
-            f"P/S {getattr(fund,'ps',None)}" if getattr(fund, "ps", None) else "",
-            f"rev growth {getattr(fund,'revenue_growth',None)}%" if getattr(fund, "revenue_growth", None) is not None else "",
-            f"net margin {getattr(fund,'net_margin',None)}%" if getattr(fund, "net_margin", None) is not None else "",
-            f"D/E {getattr(fund,'debt_to_equity',None)}" if getattr(fund, "debt_to_equity", None) is not None else "",
-            f"mktcap {getattr(fund,'market_cap',None)}" if getattr(fund, "market_cap", None) else "",
-        ])))
-        if sc:
-            L.append("FACTOR SCORES (0-100): " + ", ".join(
-                f"{k} {v}" for k, v in sc.items() if v is not None))
-        if getattr(fund, "target_mean", None):
-            L.append(f"ANALYST TARGET: {fund.target_mean} (vs price {fund.price})")
+        # Reuse the EXACT same formatter as the main analysis context (analyzer._fund_block)
+        # so bull/bear/judge see byte-identical figures to what the primary analysis used —
+        # a separate hand-rolled formatter here previously mismatched units (e.g. net margin
+        # shown as a raw fraction + "%" instead of ×100), causing bull/bear/judge to argue
+        # over "misstated" numbers that were actually a formatting bug, not a real dispute.
+        L.append("FUNDAMENTALS:\n" + _analyzer._fund_block(fund))
+        if getattr(fund, "market_cap", None):
+            L.append(f"MARKET CAP: {_analyzer._money(fund.market_cap)}")
     if tech and not getattr(tech, "error", None):
         L.append("TECHNICALS: " + ", ".join(filter(None, [
             f"RSI {tech.rsi}" if tech.rsi is not None else "",
@@ -104,10 +97,11 @@ def build_context(ticker, name, fund, tech, crowd_entry, news_items, prior=None)
         L.append(f"CROWD SENTIMENT (Adanos consensus): {con.get('label')} "
                  f"({con.get('bullish')}% bull / {con.get('bearish')}% bear, buzz {con.get('buzz')})")
     if news_items:
-        L.append("RECENT NEWS:")
+        L.append("RECENT NEWS (full article content where available — read it for the "
+                 "actual reason behind any move, not just the headline):")
         for it in news_items[:6]:
-            summ = (getattr(it, "summary", "") or "")[:240]
-            L.append(f"  - {it.title} [{it.source}] {summ}")
+            summ = (getattr(it, "summary", "") or "")[:900]
+            L.append(f"  - {it.title} [{it.source}]\n    {summ}")
     if prior:
         if prior.get("news_impact"):
             L.append(f"PRIOR ANALYST NOTE (impact): {prior['news_impact']}")

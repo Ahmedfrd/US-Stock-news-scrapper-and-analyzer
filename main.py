@@ -87,14 +87,32 @@ def _market_flags(instruments):
     return out
 
 
-def _news_for(tk, name, lookback, max_items):
+def _news_for(tk, name, lookback, max_items, fetch_full=False, full_limit=2):
+    """ETF holdings and stocks-to-watch bypass sources.collect(), so they never
+    got the full-article-body treatment collect() applies to portfolio holdings —
+    they were stuck with a 1-2 sentence RSS/Finnhub blurb, which is why the AI
+    could only paraphrase headlines instead of explaining the actual news. Fetch
+    the real article body for the top few items here too."""
     arts = sources.finnhub_news(tk, max_items, lookback)
     if not arts:
         arts = sources.google_news(f'{name} stock OR "{tk}"', tk, "stock", max_items, lookback)
+    if fetch_full:
+        n = 0
+        for a in arts:
+            if n >= full_limit:
+                break
+            if not a.url or "news.google.com" in a.url:
+                continue
+            body, final_url = sources.fetch_article_text(a.url)
+            if final_url and "finnhub.io" not in final_url:
+                a.url = final_url
+            if body:
+                a.summary = (a.summary + " " + body).strip()[:1800]
+                n += 1
     return arts
 
 
-def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="US"):
+def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="US", fetch_full=False):
     """Fetch fundamentals/technicals/earnings/filing/etf + news for one ticker."""
     if market == "PK":
         return {"news": sources.google_news(f'"{tk}" PSX OR "{name}" Pakistan stock',
@@ -102,7 +120,7 @@ def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="
                 "fund": pk.fetch_fundamentals(tk, name),
                 "tech": pk.technicals(tk),
                 "earn": None, "fil": None, "etf": None, "holding_news": {}}
-    data = {"news": _news_for(tk, name, lookback, max_items),
+    data = {"news": _news_for(tk, name, lookback, max_items, fetch_full=fetch_full),
             "fund": fundamentals.fetch(tk, name),
             "tech": tech_mod.compute(tk),
             "earn": market_data.earnings_window(tk) if (market_data and market_data.enabled()) else None,
@@ -112,7 +130,7 @@ def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="
         prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=peers)
         data["etf"] = prof
         for h in prof.holdings[:8]:
-            arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4)
+            arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4, fetch_full=fetch_full, full_limit=1)
             if arts: data["holding_news"][h.symbol] = arts
     return data
 
@@ -163,6 +181,7 @@ def main():
     benchmark = config.get("etf_benchmark", "SPY")
     lookback = int(config.get("sources", {}).get("lookback_hours", 24))
     max_items = int(config.get("sources", {}).get("max_items_per_query", 8))
+    fetch_full = bool(config.get("sources", {}).get("fetch_full_articles", False))
 
     print("[1/6] Collecting news…")
     items = sources.collect(config)
@@ -195,7 +214,7 @@ def main():
                 prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=s.get("peers"))
                 etf_profiles[tk] = prof
                 for h in prof.holdings[:8]:
-                    arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4)
+                    arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4, fetch_full=fetch_full, full_limit=1)
                     if arts: etf_hnews.setdefault(tk, {})[h.symbol] = arts
 
     print(f"[3/6] Sentiment + crowd ({'Reddit' if market=='PK' else 'Adanos'}) + market flags…")
@@ -282,7 +301,7 @@ def main():
         witems, kept = [], []
         for w in watch:
             tk = w["ticker"].strip()
-            d = _gather_stock(tk, tk, lookback, max_items, benchmark, market=market)
+            d = _gather_stock(tk, tk, lookback, max_items, benchmark, market=market, fetch_full=fetch_full)
             sc = shariah.screen(d["fund"])
             if shariah_only and sc["status"] == "fail":
                 print(f"      dropped {tk} — {sc['reasons'][0]}")
