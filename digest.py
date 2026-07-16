@@ -226,7 +226,12 @@ def _links_list(items,label="Sources & full articles",limit=8,prefix_group=False
             f'<div style="font-size:15px;font-weight:700;margin-bottom:2px">📰 {label} ({len(uniq)})</div>{rows}</div>')
 
 def _pts(lst):
-    """Clean an AI bullet array: drop empties and bare-number junk items."""
+    """Clean an AI bullet array: drop empties and bare-number junk items.
+    Defensively handles a model returning a bare string instead of a JSON
+    array (schema violation) — split it into lines rather than iterating it
+    character-by-character, which silently produced one-letter 'bullets'."""
+    if isinstance(lst, str):
+        lst = [l for l in lst.splitlines() if l.strip()] or ([lst] if lst.strip() else [])
     out=[]
     for p in (lst or []):
         t=str(p).strip().lstrip("-•–·* ").strip()
