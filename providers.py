@@ -47,12 +47,34 @@ def _retry(fn, tries=3, base=1.5):
 # --------------------------------------------------------------------------- #
 #  Gemini (Google AI Studio) — native REST
 # --------------------------------------------------------------------------- #
+def _gemini_keys() -> list[str]:
+    """All configured Gemini keys, in priority order, de-duplicated.
+
+    Add extra keys (e.g. from a second Google account, for more free quota) via
+    numbered vars GEMINI_API_KEY_2, GEMINI_API_KEY_3, … or as a comma-separated
+    list in GEMINI_API_KEY. Each Google account has its own free-tier quota, so
+    when one is rate-limited (429) the next key is tried automatically. Because
+    the debate + main analysis both back up to Gemini, more keys here is the
+    single biggest lever against the daily 429s.
+    """
+    keys: list[str] = []
+    raw: list[str] = []
+    for var in ("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3",
+                "GEMINI_API_KEY_4", "GOOGLE_API_KEY"):
+        val = os.environ.get(var)
+        if val:
+            raw.extend(val.split(","))          # allow comma-separated lists too
+    for k in raw:
+        k = k.strip()
+        if k and k not in keys:
+            keys.append(k)
+    return keys
+
+
 def _gemini(system: str, user: str, model: str, json_mode: bool = True) -> str:
-    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not key:
+    keys = _gemini_keys()
+    if not keys:
         raise ProviderError("GEMINI_API_KEY not set")
-    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{model}:generateContent?key={key}")
     gen_cfg = {"temperature": 0.3}
     if json_mode:
         gen_cfg["responseMimeType"] = "application/json"
@@ -62,16 +84,28 @@ def _gemini(system: str, user: str, model: str, json_mode: bool = True) -> str:
         "generationConfig": gen_cfg,
     }
 
-    def call():
-        r = requests.post(url, json=body, timeout=90)
-        if r.status_code == 429:
-            raise ProviderError("Gemini rate limited (429)")
-        r.raise_for_status()
-        data = r.json()
-        cand = data["candidates"][0]
-        return "".join(p.get("text", "") for p in cand["content"]["parts"])
+    last = None
+    for idx, key in enumerate(keys, 1):
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:generateContent?key={key}")
 
-    return _retry(call)
+        def call():
+            r = requests.post(url, json=body, timeout=90)
+            if r.status_code == 429:
+                raise ProviderError("Gemini rate limited (429)")
+            r.raise_for_status()
+            data = r.json()
+            cand = data["candidates"][0]
+            return "".join(p.get("text", "") for p in cand["content"]["parts"])
+
+        try:
+            return _retry(call)
+        except Exception as e:  # noqa: BLE001 — this key exhausted; try the next one
+            last = e
+            if len(keys) > 1:
+                print(f"[providers] Gemini key #{idx} failed ({e}); trying next key.",
+                      flush=True)
+    raise ProviderError(str(last))
 
 
 # --------------------------------------------------------------------------- #
@@ -137,7 +171,7 @@ def available(provider: str) -> bool:
     """True if the key for this provider is present in the environment."""
     provider = (provider or "gemini").lower()
     if provider == "gemini":
-        return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+        return bool(_gemini_keys())
     if provider in _OPENAI_COMPATIBLE:
         return bool(os.environ.get(_OPENAI_COMPATIBLE[provider][1]))
     return False

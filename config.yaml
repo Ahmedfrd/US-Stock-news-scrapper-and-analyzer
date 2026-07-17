@@ -23,6 +23,8 @@ watchlist:
     - ticker: UMMA
       name: Wahed Dow Jones Islamic World ETF
       peers: [SPWO]
+    - ticker: SPRE
+      name: SP Funds S&P Global REIT Sharia ETF
   topics:
     - "Technology and semiconductor industry"
     - "S&P 500 stock market"
@@ -69,15 +71,15 @@ analysis:
   debate: true               # 3-layer bull/bear/judge verdict on selected names
   debate_scope: all          # watch | holdings | all
   debate_max: 8              # cap debated names/run (free-tier safety)
-  debate_providers: {bull: groq, bear: openrouter, judge: gemini}
+  debate_providers: {bull: groq, bear: openrouter, judge: groq}
   provider: gemini            # gemini | groq | openrouter  (all free tiers)
   model: gemini-2.5-flash
-  fallbacks: [gemini]   # if the primary fails/rate-limits, Gemini is the sole backup
-                        # (its free tier is far more generous than Groq/OpenRouter's,
-                        # and OpenRouter's unfunded tier caps at 50 req/day) — if that
-                        # also fails, the free local heuristic runs. A no-op today
-                        # since provider is already gemini; kept so switching
-                        # `provider` still backs up to gemini automatically.
+  fallbacks: [groq, openrouter]   # tried in order if the primary (gemini) fails or
+                        # rate-limits. Previously this was [gemini] — same as the
+                        # primary — so the main analysis NEVER fell back to another
+                        # AI and dropped straight to the local heuristic whenever
+                        # Gemini 429'd. Groq is the most reliable free tier here, so
+                        # it goes first. If all AIs fail, the heuristic runs.
                         # The report header always states what actually ran.
 
 # Weekly sector deep-dive runs on this weekday (news scraped over the past 7 days).
