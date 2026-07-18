@@ -114,7 +114,7 @@ def _build_context(items, funds, extras, watchlist) -> str:
                     out.append(f"  news on holding {sym} (read the content for the actual "
                                f"reason behind its move, not just the headline):")
                     for a in arts[:4]:
-                        snip = (a.summary[:700] + "…") if len(a.summary or "") > 700 else (a.summary or "")
+                        snip = (a.summary[:1400] + "…") if len(a.summary or "") > 1400 else (a.summary or "")
                         out.append(f"    - {a.title} [{a.source}]" + (f"\n      {snip}" if snip else ""))
         elif f:
             out.append(_fund_block(f))
@@ -157,7 +157,7 @@ def _build_context(items, funds, extras, watchlist) -> str:
             out.append(f"  LATEST SEC FILING {fil['form']} filed {fil['filed']} — excerpt:")
             out.append(f"    \"{fil['excerpt'][:2500]}\"")
         for it in by_group.get(tk, [])[:10]:
-            snip = (it.summary[:900] + "…") if len(it.summary) > 900 else it.summary
+            snip = (it.summary[:1800] + "…") if len(it.summary) > 1800 else it.summary
             out.append(f"    - {it.title} [{it.source}]" + (f"\n      {snip}" if snip else ""))
 
     for t in watchlist.get("topics", []):
@@ -245,7 +245,7 @@ def _instructions(tickers, topics, weekly, shariah=False):
     return f"""Return ONLY a JSON object (no prose, no code fences):
 
 {{
-  "market_overview": "3-5 bullet lines (each starting '- ', one concrete fact with figures) tying today's news to the macro backdrop",
+  "market_overview": "4-6 bullet lines (each starting '- '). This is a NEWS DIGEST, not a stat dump: lead with the day's market-moving STORY and the REASON behind it (e.g. '- Tech sold off ~3% as investors dumped AI names after Moonlit AI's cheaper model raised margin fears — Nvidia -5%, chip suppliers hit'), then tie it to the macro backdrop. Every bullet must name WHAT happened, to WHOM, by HOW MUCH (figures), and WHY. Never just report levels with no narrative.",
   "priority": [{{"ticker": "AAPL", "why": "why this matters most today"}}],
   "stocks": [
     {{"ticker": "AAPL",
@@ -284,7 +284,7 @@ def _instructions(tickers, topics, weekly, shariah=False):
   "topics": [{{"topic": "semiconductor industry", "sentiment": "...",
       "summary": "3-5 DETAILED bullet lines (each starting '- ') on the industry/market implication, citing specific figures (company moves %, revenue/deal numbers, analyst targets) from the data",
       "key_companies": [{{"name": "TSMC", "note": "1-2 sentences: why this (non-portfolio) company's news matters, with figures if available"}}]}}],
-  "macro": {{"summary": "4-6 DETAILED bullet lines (each starting '- ') on the macro backdrop, explicitly citing the MARKET FLAGS figures (Brent/WTI oil, gold, dollar/DXY, S&P 500 & Nasdaq levels and % moves, 10Y yield) and any rates/inflation/jobs news",
+  "macro": {{"summary": "4-6 DETAILED bullet lines (each starting '- ') on the macro backdrop. Explain the DRIVERS behind the moves (the specific report, policy, or event and what it did), not just the levels — explicitly cite the MARKET FLAGS figures (Brent/WTI oil, gold, dollar/DXY, S&P 500 & Nasdaq levels and % moves, 10Y yield) and any rates/inflation/jobs news",
       "points": ["3-5 bullets, each with a concrete figure or level"],
       "risks": ["3-5 forward-looking risks: the concrete trigger (an escalation, a data print, a policy decision) and what it would do to markets — one risk per line, specific not generic"],
       "watch": ["upcoming catalysts/data releases the reader should watch for, one per line, each phrased as 'date/time (if known): what happens', e.g. '15-Jul, 8:30am ET: US CPI print' — from the news/macro data provided, not invented"]}}{weekly_block}

@@ -1,13 +1,16 @@
 name: Market Digest (off-machine)
 
-# Runs 07:00 Hong Kong time, Mon-Fri (23:00 UTC the previous day). Both
-# reports go out every run by default; set market_digest_day in config.yaml
-# to a UTC weekday to make the Market Digest weekly. Manual "Run workflow"
-# runs always produce BOTH reports. GitHub cron is UTC. Nothing runs on your
-# own computer.
+# Runs 07:00 Hong Kong time, Mon-Sat (23:00 UTC the previous day: Sun-Fri UTC).
+# HK is UTC+8, so 23:00 UTC on days 0-5 (Sun-Fri) = 07:00 HK on Mon-Sat. Each
+# run scrapes the previous ~24h of news (sources.lookback_hours), i.e. yesterday's
+# session — e.g. Tue 07:00 HK captures Monday's US close (Mon 20:00 UTC, ~3h
+# earlier); the Saturday run captures Friday's US session. Both reports go out
+# every run by default; set market_digest_day in config.yaml to a UTC weekday to
+# make the Market Digest weekly. Manual "Run workflow" runs always produce BOTH
+# reports. GitHub cron is UTC. Nothing runs on your own computer.
 on:
   schedule:
-    - cron: "0 23 * * 0-4"
+    - cron: "0 23 * * 0-5"
   workflow_dispatch: {}          # manual "Run workflow" button in the Actions tab
 
 jobs:
@@ -23,6 +26,7 @@ jobs:
         env:
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2:   ${{ secrets.GEMINI_API_KEY_2 }}
+          GEMINI_API_KEY_3:   ${{ secrets.GEMINI_API_KEY_3 }}
           GROQ_API_KEY:       ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           FINNHUB_API_KEY:    ${{ secrets.FINNHUB_API_KEY }}

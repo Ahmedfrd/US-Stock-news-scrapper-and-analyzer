@@ -484,10 +484,7 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     fil=fils.get(tk)
     if fil: H.append(f'<div style="font-size:15px;margin-bottom:6px">📄 <a href="{_esc(fil["url"])}" style="color:#3367d6">{_esc(fil["form"])} filed {_esc(fil["filed"])}</a></div>')
 
-    # ---- 5) DEBATE — research verdict + bull vs bear ----
-    H.append(_debate_panel(s))
-
-    # ---- 6) NEWS ARTICLES — visible, at the end of the card ----
+    # ---- 5) NEWS ARTICLES — visible, the source list behind the summary above ----
     if is_etf:
         hn=(extras.get("etf_holding_news") or {}).get(tk,{})
         hitems=[a for arts in hn.values() for a in arts]
@@ -496,6 +493,9 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
         H.append(_links_list(by_group.get(tk, []),label="ETF / fund news",limit=8))
     else:
         H.append(_links_list(by_group.get(tk, []),label="Sources & full articles",limit=8))
+
+    # ---- 6) DEBATE — research verdict + bull vs bear, LAST (news is the priority) ----
+    H.append(_debate_panel(s))
     H.append("</div>")
     return "".join(H)
 
@@ -617,7 +617,7 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
 
     ws=watch_analysis.get("stocks", []) if watch_analysis else []
     if ws:
-        wsub = "full analysis — technicals + combined call"
+        wsub = "full analysis — news, technicals + research verdict"
         if extras.get("shariah"):
             wsub += " · Shariah-screened"
         B.append(_h2("Stocks to watch", wsub))

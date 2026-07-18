@@ -100,7 +100,7 @@ def build_context(ticker, name, fund, tech, crowd_entry, news_items, prior=None)
         L.append("RECENT NEWS (full article content where available — read it for the "
                  "actual reason behind any move, not just the headline):")
         for it in news_items[:6]:
-            summ = (getattr(it, "summary", "") or "")[:900]
+            summ = (getattr(it, "summary", "") or "")[:1400]
             L.append(f"  - {it.title} [{it.source}]\n    {summ}")
     if prior:
         if prior.get("news_impact"):
@@ -109,13 +109,21 @@ def build_context(ticker, name, fund, tech, crowd_entry, news_items, prior=None)
 
 
 def _fallback_chain(primary):
-    """On failure, back up to Gemini only. Its free tier (~1,500 req/day) is far
-    more generous than Groq/OpenRouter's, and OpenRouter's unfunded free tier
-    caps at just 50 req/day — cascading through every other provider on every
-    failure burns retries and time on options just as likely to be rate-limited."""
-    if primary == "gemini" or not providers.available("gemini"):
-        return [primary]
-    return [primary, "gemini"]
+    """Try the assigned provider first, then EVERY other available provider as a
+    backup, so a rate-limited or failed call still gets answered instead of
+    dropping to the canned 'unavailable' text.
+
+    Ordering is deliberate: after the primary we try groq → openrouter → gemini,
+    which keeps Gemini LAST for the bull/bear advocacy roles. Groq and OpenRouter
+    are the priority engines for the debate; Gemini's tight free-tier quota is
+    reserved for its own role (the judge) and used only as a last resort for the
+    others. The judge (primary=gemini) still gets groq/openrouter behind it."""
+    order = [primary, "groq", "openrouter", "gemini"]
+    chain = []
+    for p in order:
+        if p and p not in chain and providers.available(p):
+            chain.append(p)
+    return chain or [primary]
 
 
 def _call(role, provider, sysmsg, ctx, task, ticker=""):

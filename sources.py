@@ -211,7 +211,7 @@ def rss_feed(url: str, source_name: str, group: str, group_type: str,
 # --------------------------------------------------------------------------- #
 #  Optional full-article text (off by default)
 # --------------------------------------------------------------------------- #
-def fetch_article_text(url: str, limit: int = 1500):
+def fetch_article_text(url: str, limit: int = 3500):
     """Fetch article body. Follows redirects (e.g. Finnhub's finnhub.io links
     resolve to the real publisher). Returns (text, final_url)."""
     try:
@@ -351,7 +351,7 @@ def collect(config: dict) -> list[NewsItem]:
         from collections import defaultdict as _dd
         per_group = _dd(int)
         for it in items:
-            if per_group[it.group] >= 3:
+            if per_group[it.group] >= 4:      # read the top few articles per name in FULL
                 continue
             if not it.url or "news.google.com" in it.url:
                 continue
@@ -359,7 +359,9 @@ def collect(config: dict) -> list[NewsItem]:
             if final_url and "finnhub.io" not in final_url:
                 it.url = final_url
             if body:
-                it.summary = (it.summary + " " + body).strip()[:1800]
+                # Keep a large slice of the real article body so the AI can explain
+                # WHY a name moved (figures, guidance, deal terms), not just the headline.
+                it.summary = (it.summary + " " + body).strip()[:3500]
                 per_group[it.group] += 1
 
     # Deduplicate by (group, title)

@@ -87,7 +87,7 @@ def _market_flags(instruments):
     return out
 
 
-def _news_for(tk, name, lookback, max_items, fetch_full=False, full_limit=2):
+def _news_for(tk, name, lookback, max_items, fetch_full=False, full_limit=3):
     """ETF holdings and stocks-to-watch bypass sources.collect(), so they never
     got the full-article-body treatment collect() applies to portfolio holdings —
     they were stuck with a 1-2 sentence RSS/Finnhub blurb, which is why the AI
@@ -107,7 +107,7 @@ def _news_for(tk, name, lookback, max_items, fetch_full=False, full_limit=2):
             if final_url and "finnhub.io" not in final_url:
                 a.url = final_url
             if body:
-                a.summary = (a.summary + " " + body).strip()[:1800]
+                a.summary = (a.summary + " " + body).strip()[:3500]
                 n += 1
     return arts
 

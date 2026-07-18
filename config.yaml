@@ -14,9 +14,6 @@ watchlist:
 
     # ETFs are fully supported (deep fund analysis). List peer ETFs to compare
     # against; the benchmark for relative performance + beta is etf_benchmark below.
-    - ticker: SPUS
-      name:  SP Funds S&P 500 Sharia Industry Exclusions ETF
-      peers: [VOO]
     - ticker: HLAL
       name: Wahed FTSE USA Shariah ETF
       peers: [SPSK]
@@ -71,7 +68,10 @@ analysis:
   debate: true               # 3-layer bull/bear/judge verdict on selected names
   debate_scope: all          # watch | holdings | all
   debate_max: 8              # cap debated names/run (free-tier safety)
-  debate_providers: {bull: groq, bear: openrouter, judge: groq}
+  # Bull & bear run on Groq + OpenRouter (priority engines, so we spare Gemini's
+  # tight free quota); the judge is Gemini. Every debate role still falls back
+  # through ALL other available providers if its engine fails/rate-limits.
+  debate_providers: {bull: groq, bear: openrouter, judge: gemini}
   provider: gemini            # gemini | groq | openrouter  (all free tiers)
   model: gemini-2.5-flash
   fallbacks: [groq, openrouter]   # tried in order if the primary (gemini) fails or
