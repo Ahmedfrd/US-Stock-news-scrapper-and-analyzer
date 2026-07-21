@@ -14,7 +14,18 @@ main.py — build TWO reports and send them as two separate emails:
 from __future__ import annotations
 
 import os, sys, argparse, datetime as dt
+from zoneinfo import ZoneInfo
 import yaml
+
+# Runner clock is UTC; the digest is read in Hong Kong each morning. Use HK time
+# for the displayed date and for the "which morning is this" weekday checks so a
+# run near the 23:00-UTC cron (which GitHub can delay across UTC midnight) is
+# attributed to the correct local day.
+LOCAL_TZ = ZoneInfo("Asia/Hong_Kong")
+
+
+def _now_local():
+    return dt.datetime.now(LOCAL_TZ)
 
 try:
     from dotenv import load_dotenv
@@ -64,6 +75,17 @@ def is_market_day(config, args):
     if args.dry_run or args.force_market: return True
     if os.environ.get("GITHUB_EVENT_NAME","") == "workflow_dispatch": return True
     return _WEEKDAYS[dt.date.today().weekday()] == day
+
+def _lookback_hours(config):
+    """News window in hours. The workflow runs ~23:00 UTC and the digest is read
+    the next HK morning; when that morning is a Monday the market was closed over
+    the weekend, so widen the window to fold Saturday + Sunday news into the
+    Monday edition. Keyed on the HK weekday so a run delayed across UTC midnight
+    is still recognised as the Monday-morning edition."""
+    base = int(config.get("sources", {}).get("lookback_hours", 24))
+    if _now_local().weekday() == 0:  # Monday HK morning -> cover Sat+Sun
+        return max(base, 54)
+    return base
 
 def _market_flags(instruments):
     if instruments is None: pairs=[{"name":n,"symbol":s} for n,s in _DEFAULT_FLAGS]
@@ -179,7 +201,8 @@ def main():
         print(f"[market] Market Digest is set to weekly (market_digest_day: "
               f"{config.get('market_digest_day')} UTC) — today is Portfolio Digest only.")
     benchmark = config.get("etf_benchmark", "SPY")
-    lookback = int(config.get("sources", {}).get("lookback_hours", 24))
+    lookback = _lookback_hours(config)
+    config.setdefault("sources", {})["lookback_hours"] = lookback  # so sources.collect() agrees
     max_items = int(config.get("sources", {}).get("max_items_per_query", 8))
     fetch_full = bool(config.get("sources", {}).get("fetch_full_articles", False))
 
@@ -384,7 +407,7 @@ def main():
         reports.append(("market", *digest.build_market(port_analysis, watch_analysis,
                                                        items, funds, extras, watch_reasons)))
     for kind, subject, html_body, text_body in reports:
-        path = os.path.join(out_dir, f"digest-{dt.date.today():%Y-%m-%d}-{kind}.html")
+        path = os.path.join(out_dir, f"digest-{_now_local().date():%Y-%m-%d}-{kind}.html")
         with open(path, "w", encoding="utf-8") as f: f.write(html_body)
         print(f"      saved {path}")
 

@@ -7,3 +7,4 @@ vaderSentiment>=3.3.2
 python-dotenv>=1.0.0
 pandas>=2.0.0
 lxml>=4.9.0
+tzdata>=2024.1  # ensures ZoneInfo("Asia/Hong_Kong") resolves on any runner

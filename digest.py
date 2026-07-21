@@ -13,7 +13,17 @@ from __future__ import annotations
 
 import html
 import datetime as dt
+from zoneinfo import ZoneInfo
 from collections import defaultdict
+
+# The runner clock is UTC, but the digest is read in Hong Kong each morning.
+# Stamp the displayed date in HK time so a run near the 23:00-UTC cron (which
+# GitHub can delay across UTC midnight) always shows the correct HK morning date.
+LOCAL_TZ = ZoneInfo("Asia/Hong_Kong")
+
+
+def _now_local():
+    return dt.datetime.now(LOCAL_TZ)
 
 def _esc(x):
     """html.escape that tolerates non-strings (the AI occasionally returns a
@@ -553,12 +563,12 @@ _REGION_FLAG = {"US": "🇺🇸", "PK": "🇵🇰"}
 
 
 def build_portfolio(analysis, items, funds, extras):
-    today=dt.datetime.now().strftime("%A, %d %B %Y")
+    today=_now_local().strftime("%A, %d %B %Y")
     by_group=defaultdict(list)
     for it in items: by_group[it.group].append(it)
     status=analysis.get("_status", {})
     region=extras.get("region","US")
-    subject=f"📊 Portfolio Digest {region} — {dt.datetime.now():%b %d}"
+    subject=f"📊 Portfolio Digest {region} — {_now_local():%b %d}"
     B=[]
     B.append(f'<div style="background:#f6f8fa;border-left:4px solid #3367d6;padding:12px 16px;border-radius:6px;margin-bottom:18px">'
              f'<div style="font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:#3367d6;margin-bottom:6px">Portfolio overview</div>'
@@ -593,14 +603,14 @@ def build_portfolio(analysis, items, funds, extras):
 #  MARKET report
 # --------------------------------------------------------------------------- #
 def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reasons=None):
-    today=dt.datetime.now().strftime("%A, %d %B %Y")
+    today=_now_local().strftime("%A, %d %B %Y")
     weekly=bool(extras.get("weekly")); watch_reasons=watch_reasons or {}
     by_group=defaultdict(list)
     for it in items: by_group[it.group].append(it)
     status=port_analysis.get("_status", {})
     region=extras.get("region","US")
     flag=_REGION_FLAG.get(region,"🌐")
-    subject=f"{flag} {'Weekly ' if weekly else ''}Market Digest {region} — {dt.datetime.now():%b %d}"
+    subject=f"{flag} {'Weekly ' if weekly else ''}Market Digest {region} — {_now_local():%b %d}"
     B=[]
     B.append(f'<div style="background:#f6f8fa;border-left:4px solid #3367d6;padding:12px 16px;border-radius:6px;margin-bottom:18px">'
              f'<div style="font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:#3367d6;margin-bottom:6px">Market overview</div>'
