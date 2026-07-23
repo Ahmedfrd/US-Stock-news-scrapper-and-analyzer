@@ -91,7 +91,7 @@ end of the card, same as a regular stock.
 
 | Data | Source | Key |
 |------|--------|-----|
-| News (direct publisher links, full articles) | Finnhub company-news + Google News RSS | `FINNHUB_API_KEY` (free) |
+| News (direct publisher links, full articles) | Finnhub company-news + Marketaux + Google News RSS | `FINNHUB_API_KEY` (free) |
 | Fundamentals, prices, targets, ETF holdings | Yahoo Finance (`yfinance`) | none |
 | Technicals (stocks **and** crypto) | computed from Yahoo prices | none |
 | Earnings calendar + surprises | Finnhub | `FINNHUB_API_KEY` |
