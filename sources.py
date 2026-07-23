@@ -64,12 +64,25 @@ def _parsed_to_dt(parsed) -> dt.datetime | None:
         return None
 
 
-def _recent(published: dt.datetime | None, lookback_hours: int) -> bool:
-    # Keep items with no timestamp (better to include than silently drop).
+def _recent(published: dt.datetime | None, lookback_hours: int,
+            keep_undated: bool = False) -> bool:
+    # For a freshness digest, an item we can't date is a liability, not a bonus:
+    # week-old stories slip through when their timestamp fails to parse. Default
+    # is now to DROP undated items. Macro/official feeds pass keep_undated=True
+    # because their releases are inherently recent even when the feed omits a date.
     if published is None:
-        return True
+        return keep_undated
     cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=lookback_hours)
     return published >= cutoff
+
+
+def _entry_dt(entry) -> dt.datetime | None:
+    # Try published, then updated — some feeds populate only one of them.
+    for attr in ("published_parsed", "updated_parsed"):
+        got = _parsed_to_dt(getattr(entry, attr, None))
+        if got:
+            return got
+    return None
 
 
 def _parse_feed(url: str) -> feedparser.FeedParserDict:
@@ -88,12 +101,14 @@ def _parse_feed(url: str) -> feedparser.FeedParserDict:
 # --------------------------------------------------------------------------- #
 def google_news(query: str, group: str, group_type: str,
                 max_items: int, lookback_hours: int) -> list[NewsItem]:
-    q = quote_plus(f"{query} when:2d")
+    # Window tracks the configured lookback instead of a hardcoded 2 days.
+    when = f"{lookback_hours}h" if lookback_hours < 48 else f"{lookback_hours // 24}d"
+    q = quote_plus(f"{query} when:{when}")
     url = f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
     feed = _parse_feed(url)
     items: list[NewsItem] = []
     for e in feed.entries[: max_items * 2]:
-        published = _parsed_to_dt(getattr(e, "published_parsed", None))
+        published = _entry_dt(e)
         if not _recent(published, lookback_hours):
             continue
         source = ""
@@ -190,9 +205,12 @@ def rss_feed(url: str, source_name: str, group: str, group_type: str,
              max_items: int, lookback_hours: int) -> list[NewsItem]:
     feed = _parse_feed(url)
     items: list[NewsItem] = []
+    # Official macro releases are inherently current even when the feed omits a
+    # timestamp, so those are allowed through undated; other feeds are not.
+    keep_undated = (group_type == "macro")
     for e in feed.entries[: max_items * 2]:
-        published = _parsed_to_dt(getattr(e, "published_parsed", None))
-        if not _recent(published, lookback_hours):
+        published = _entry_dt(e)
+        if not _recent(published, lookback_hours, keep_undated=keep_undated):
             continue
         items.append(NewsItem(
             title=_clean(getattr(e, "title", "")),
@@ -269,6 +287,52 @@ def finnhub_news(ticker: str, max_items: int, lookback_hours: int) -> list[NewsI
     return items
 
 
+def marketaux_news(ticker: str, max_items: int, lookback_hours: int) -> list[NewsItem]:
+    """Company news from Marketaux (free tier: 100 req/day). Ticker-tagged with a
+    server-side published_after filter, so freshness is enforced at the source and
+    every item arrives with a real timestamp. No-op without MARKETAUX_API_KEY."""
+    import os
+    key = os.environ.get("MARKETAUX_API_KEY")
+    if not key:
+        return []
+    after = (dt.datetime.now(dt.timezone.utc)
+             - dt.timedelta(hours=lookback_hours)).strftime("%Y-%m-%dT%H:%M")
+    params = {
+        "symbols": ticker,
+        "filter_entities": "true",
+        "language": "en",
+        "published_after": after,
+        "limit": max_items,
+        "api_token": key,
+    }
+    try:
+        r = requests.get("https://api.marketaux.com/v1/news/all",
+                         params=params, headers=_UA, timeout=20)
+        r.raise_for_status()
+        data = r.json().get("data", [])
+    except Exception:
+        return []
+    items: list[NewsItem] = []
+    for n in data:
+        published = None
+        if n.get("published_at"):
+            try:
+                published = dt.datetime.fromisoformat(
+                    n["published_at"].replace("Z", "+00:00"))
+            except Exception:
+                published = None
+        if not _recent(published, lookback_hours):
+            continue
+        items.append(NewsItem(
+            title=_clean(n.get("title", "")),
+            url=n.get("url", ""),
+            source=n.get("source", "Marketaux"),
+            published=published,
+            summary=_clean(n.get("description") or n.get("snippet") or ""),
+            group=ticker, group_type="stock"))
+    return items
+
+
 def sector_news(sectors: list[str], lookback_days: int = 7,
                 max_items: int = 10) -> dict:
     """Weekly: gather ~7 days of news per sector. Returns {sector: [NewsItem]}."""
@@ -308,6 +372,18 @@ def collect(config: dict) -> list[NewsItem]:
     stocks = wl.get("stocks", []) or []
     topics = wl.get("topics", []) or []
 
+    # Make the degraded path visible: if Finnhub is switched on in config but has
+    # no working key, the digest silently falls back to Google News only. Say so.
+    if src.get("finnhub", True):
+        try:
+            import market_data
+            if not market_data.enabled():
+                print("[sources] WARNING: finnhub enabled in config but "
+                      "FINNHUB_API_KEY is missing — dated, direct-link company "
+                      "news is OFF; running on Google News / RSS only.")
+        except ImportError:
+            pass
+
     for s in stocks:
         ticker = s.get("ticker", "").strip()
         name = s.get("name", ticker).strip()
@@ -318,6 +394,8 @@ def collect(config: dict) -> list[NewsItem]:
         # wrappers, so they're used only to fill gaps.
         if src.get("finnhub", True):
             items += finnhub_news(ticker, max_items, lookback)
+        if src.get("marketaux", True):
+            items += marketaux_news(ticker, max_items, lookback)
         if src.get("google_news", True):
             items += google_news(f'{name} stock OR "{ticker}"', ticker, "stock",
                                  max_items, lookback)
@@ -364,13 +442,25 @@ def collect(config: dict) -> list[NewsItem]:
                 it.summary = (it.summary + " " + body).strip()[:3500]
                 per_group[it.group] += 1
 
-    # Deduplicate by (group, title)
-    seen: set[tuple[str, str]] = set()
-    deduped: list[NewsItem] = []
+    # Deduplicate by (group, title). When the same story appears more than once,
+    # keep the copy with the most recent timestamp rather than whichever arrived
+    # first, so a dated version always wins over an undated duplicate.
+    best: dict[tuple[str, str], NewsItem] = {}
     for it in items:
+        if not it.title:
+            continue
         k = (it.group, it.key())
-        if it.title and k not in seen:
-            seen.add(k)
-            deduped.append(it)
+        cur = best.get(k)
+        if cur is None:
+            best[k] = it
+            continue
+        # Prefer the one with a timestamp; if both dated, prefer the newer.
+        if it.published and (cur.published is None or it.published > cur.published):
+            best[k] = it
+    deduped = list(best.values())
+
+    # Newest first. Undated items sink to the bottom instead of floating to the top.
+    _floor = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+    deduped.sort(key=lambda it: it.published or _floor, reverse=True)
 
     return deduped
