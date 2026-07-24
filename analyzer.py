@@ -523,13 +523,18 @@ def run_debates(analysis, watch_analysis, funds, extras, items, config):
     targets = [t for t in targets if t[0]][:cap]
     if not targets:
         return
-    print(f"[debate] running bull/bear/judge on {len(targets)} name(s) (scope={scope})…")
+    print(f"[debate] running debate/verdict on {len(targets)} name(s) (scope={scope})…")
     import time
     for i, (tk, name, sdict) in enumerate(targets):
         if i:
-            time.sleep(3)  # space the 3-call bursts out — free tiers are per-minute
+            time.sleep(3)  # space the call bursts out — free tiers are per-minute
         ctx = _debate.build_context(tk, name, funds.get(tk), techs.get(tk),
                                     crowd.get(tk), by_tk.get(tk, []), prior=sdict)
-        res = _debate.run(tk, name, ctx, config)
+        fund = funds.get(tk)
+        is_etf = bool(fund and getattr(fund, "is_etf", False))
+        # ETFs/funds skip the 3-role bull/bear/judge debate — a single direct
+        # verdict call is a better fit (a fund's news rarely supports a real
+        # adversarial case) and it saves 2 of every 3 AI calls for these names.
+        res = _debate.run_single(tk, name, ctx, config) if is_etf else _debate.run(tk, name, ctx, config)
         if res:
             sdict["debate"] = res

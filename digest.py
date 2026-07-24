@@ -763,25 +763,32 @@ def _debate_panel(s):
         extra += f'<div style="font-size:14px;margin-top:6px"><b>Start here:</b> {_esc(v["start_here"])}</div>'
     if v.get("what_would_change_it"):
         extra += f'<div style="font-size:14px;color:#5f6368;margin-top:3px"><b>Would change the call:</b> {_esc(v["what_would_change_it"])}</div>'
+    mode = d.get("mode", "debate")
+    roles = d.get("roles", {})
     bull = _prose(d.get("bull", ""), fs="14px", color="#1a1a1a")
     bear = _prose(d.get("bear", ""), fs="14px", color="#1a1a1a")
-    roles = d.get("roles", {})
-    rlabel = (f'bull: {roles.get("bull","?")} · bear: {roles.get("bear","?")} · judge: {roles.get("judge","?")}'
-              if roles else "")
-    debate_block = (
-        f'<details style="margin-top:8px"><summary style="cursor:pointer;color:#3367d6;'
-        f'font-size:14px;font-weight:600;user-select:none">▾ Bull vs Bear debate</summary>'
-        f'<div style="margin-top:8px"><div style="background:#e6f6ec;border-left:3px solid #0a7d33;'
-        f'padding:8px 10px;border-radius:6px;font-size:14px;margin-bottom:6px"><b>🐂 Bull</b><br>{bull}</div>'
-        f'<div style="background:#fdeceb;border-left:3px solid #b3261e;padding:8px 10px;border-radius:6px;'
-        f'font-size:14px"><b>🐻 Bear</b><br>{bear}</div>'
-        f'<div style="font-size:12px;color:#9aa0a6;margin-top:4px">{_esc(rlabel)}</div></div></details>')
+    debate_block = ""
+    if mode == "debate" and (bull or bear):
+        rlabel = (f'bull: {roles.get("bull","?")} · bear: {roles.get("bear","?")} · judge: {roles.get("judge","?")}'
+                  if roles else "")
+        debate_block = (
+            f'<details style="margin-top:8px"><summary style="cursor:pointer;color:#3367d6;'
+            f'font-size:14px;font-weight:600;user-select:none">▾ Bull vs Bear debate</summary>'
+            f'<div style="margin-top:8px"><div style="background:#e6f6ec;border-left:3px solid #0a7d33;'
+            f'padding:8px 10px;border-radius:6px;font-size:14px;margin-bottom:6px"><b>🐂 Bull</b><br>{bull}</div>'
+            f'<div style="background:#fdeceb;border-left:3px solid #b3261e;padding:8px 10px;border-radius:6px;'
+            f'font-size:14px"><b>🐻 Bear</b><br>{bear}</div>'
+            f'<div style="font-size:12px;color:#9aa0a6;margin-top:4px">{_esc(rlabel)}</div></div></details>')
+    else:
+        rlabel = f'verdict via: {roles.get("judge","?")}' if roles else ""
+        debate_block = f'<div style="font-size:12px;color:#9aa0a6;margin-top:6px">{_esc(rlabel)}</div>' if rlabel else ""
+    tag = "single AI take (fund/ETF)" if mode == "single" else "3-model debate"
     return _box(
         f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:5px">'
         f'<span style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368">Research verdict</span>'
         f'{_call_pill(v.get("call"))}'
         f'<span style="font-size:13px;font-weight:700;color:{conv_col}">{conv.upper()} conviction</span>'
-        f'<span style="font-size:12px;color:#9aa0a6">3-model debate</span></div>'
+        f'<span style="font-size:12px;color:#9aa0a6">{tag}</span></div>'
         f'{_prose(v.get("verdict",""),color="#1a1a1a")}'
         + (f'<div style="font-size:14px;margin-top:6px"><b>Key risks:</b><ul style="margin:3px 0;padding-left:20px">{risks}</ul></div>' if risks else "")
         + extra + debate_block,

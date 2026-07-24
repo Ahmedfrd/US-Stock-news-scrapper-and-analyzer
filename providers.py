@@ -75,7 +75,13 @@ def _gemini(system: str, user: str, model: str, json_mode: bool = True) -> str:
     keys = _gemini_keys()
     if not keys:
         raise ProviderError("GEMINI_API_KEY not set")
-    gen_cfg = {"temperature": 0.3}
+    # Gemini 2.5 Flash spends part of its output-token budget on internal
+    # "thinking" before it writes the answer; on a big structured-JSON prompt
+    # that ate into the budget enough to cut the JSON off mid-object (the
+    # "Expecting ',' delimiter" parse failures). Disabling thinking (not needed
+    # for extraction/summarization) and raising the cap fixes the truncation.
+    gen_cfg = {"temperature": 0.3, "maxOutputTokens": 8192,
+               "thinkingConfig": {"thinkingBudget": 0}}
     if json_mode:
         gen_cfg["responseMimeType"] = "application/json"
     body = {
@@ -152,7 +158,10 @@ def _openai_style(provider: str, system: str, user: str, model: str,
 DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash",              # free; try gemini-2.5-flash-lite for more RPM
     "groq": "llama-3.3-70b-versatile",         # free
-    "openrouter": "meta-llama/llama-3.3-70b-instruct:free",
+    # meta-llama/llama-3.3-70b-instruct:free was removed from OpenRouter's free
+    # catalog (every call 404'd). OpenRouter's free lineup turns over often —
+    # re-check https://openrouter.ai/models?max_price=0 if this one disappears too.
+    "openrouter": "inclusionai/ling-3.0-flash:free",
 }
 
 

@@ -50,6 +50,19 @@ _JUDGE_SYS = (
     "\"what_would_change_it\":\"one line: the datapoint/event that would flip the call\","
     "\"start_here\":\"one line: what the reader should investigate first\"}"
 )
+_SINGLE_SYS = (
+    "You are a senior fund analyst issuing an OPENING-RESEARCH read on a fund/ETF "
+    "(a starting direction, not advice), using only the data provided (holdings, "
+    "flows, technicals, crowd sentiment, news). This is a direct assessment, not a "
+    "debate — weigh the evidence yourself and give a balanced, evidence-based call. "
+    "Cite concrete figures. Respond ONLY with JSON, no prose:\n"
+    "{\"call\":\"buy|accumulate|hold|reduce|sell|avoid\","
+    "\"conviction\":\"low|medium|high\","
+    "\"verdict\":\"2-3 sentences: your read and why, citing figures\","
+    "\"key_risks\":[\"the 1-3 risks that matter most\"],"
+    "\"what_would_change_it\":\"one line: the datapoint/event that would flip the call\","
+    "\"start_here\":\"one line: what the reader should investigate first\"}"
+)
 
 
 def _pick_roles(config: dict) -> dict | None:
@@ -166,4 +179,32 @@ def run(ticker, name, ctx, config) -> dict | None:
                    "verdict": "Judge unavailable this run (provider errors — see the run "
                               "log); read the bull/bear cases below.",
                    "key_risks": [], "what_would_change_it": "", "start_here": ""}
-    return {"bull": bull, "bear": bear, "verdict": verdict, "roles": roles}
+    return {"bull": bull, "bear": bear, "verdict": verdict, "roles": roles, "mode": "debate"}
+
+
+def run_single(ticker, name, ctx, config) -> dict | None:
+    """ETFs/funds get one direct verdict call instead of the 3-role bull/bear/judge
+    debate — a fund's news rarely supports a real adversarial case, and skipping
+    two of the three calls saves meaningful free-tier budget for the stocks that
+    do warrant a debate. Still falls back through every available provider."""
+    roles = _pick_roles(config)
+    if not roles:
+        return None
+    primary = roles["judge"]
+    verdict, used = {}, primary
+    for prov in _fallback_chain(primary):
+        try:
+            raw = providers.complete(prov, _SINGLE_SYS,
+                                     f"{ctx}\n\nTASK: Assess {ticker} and return the JSON.")
+            verdict = providers.normalize_text_fields(providers.parse_json(raw))
+            used = prov
+            break
+        except Exception as e:  # noqa: BLE001
+            print(f"[debate] single-call verdict for {ticker} via {prov} failed: {e}", flush=True)
+    if not verdict.get("call"):
+        verdict = {"call": "hold", "conviction": "low",
+                   "verdict": "Verdict unavailable this run (all AI providers failed or "
+                              "were rate-limited; details in the run log).",
+                   "key_risks": [], "what_would_change_it": "", "start_here": ""}
+    return {"bull": "", "bear": "", "verdict": verdict,
+            "roles": {"judge": used}, "mode": "single"}
