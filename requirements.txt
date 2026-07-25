@@ -8,3 +8,6 @@ python-dotenv>=1.0.0
 pandas>=2.0.0
 lxml>=4.9.0
 tzdata>=2024.1  # ensures ZoneInfo("Asia/Hong_Kong") resolves on any runner
+json-repair>=0.30.0  # salvage the near-valid JSON free LLMs emit (unescaped quotes,
+                     # dropped delimiters, truncated tails) so the AI result is used
+                     # instead of silently dropping to the heuristic

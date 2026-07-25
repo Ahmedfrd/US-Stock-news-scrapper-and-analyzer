@@ -80,7 +80,11 @@ def _gemini(system: str, user: str, model: str, json_mode: bool = True) -> str:
     # that ate into the budget enough to cut the JSON off mid-object (the
     # "Expecting ',' delimiter" parse failures). Disabling thinking (not needed
     # for extraction/summarization) and raising the cap fixes the truncation.
-    gen_cfg = {"temperature": 0.3, "maxOutputTokens": 8192,
+    # 8192 was still too small for the full daily digest JSON (5+ names, each
+    # with a dozen bullet fields, plus sectors/macro/crypto/topics) — it hit the
+    # cap mid-object and returned invalid JSON, so the analyzer dropped to the
+    # heuristic on EVERY run. 24k gives comfortable headroom (Flash allows 64k).
+    gen_cfg = {"temperature": 0.3, "maxOutputTokens": 24576,
                "thinkingConfig": {"thinkingBudget": 0}}
     if json_mode:
         gen_cfg["responseMimeType"] = "application/json"
@@ -99,10 +103,22 @@ def _gemini(system: str, user: str, model: str, json_mode: bool = True) -> str:
             r = requests.post(url, json=body, timeout=90)
             if r.status_code == 429:
                 raise ProviderError("Gemini rate limited (429)")
-            r.raise_for_status()
+            if r.status_code >= 400:
+                # Surface the API's own error message — a bare "400 Bad Request"
+                # hides whether it's a dead model, bad key or oversized request.
+                raise ProviderError(f"Gemini HTTP {r.status_code}: {r.text[:400]}")
             data = r.json()
             cand = data["candidates"][0]
-            return "".join(p.get("text", "") for p in cand["content"]["parts"])
+            text = "".join(p.get("text", "") for p in cand.get("content", {}).get("parts", []))
+            # MAX_TOKENS => the JSON was cut off and is unparseable. Report it
+            # clearly (and let the caller fall through) instead of emitting a
+            # silent truncated blob. Any non-STOP finish with no text is also bad.
+            fin = cand.get("finishReason")
+            if fin and fin not in ("STOP", "MAX_TOKENS") and not text:
+                raise ProviderError(f"Gemini returned no text (finishReason={fin})")
+            if not text:
+                raise ProviderError(f"Gemini returned empty text (finishReason={fin})")
+            return text
 
         try:
             return _retry(call)
@@ -122,6 +138,15 @@ _OPENAI_COMPATIBLE = {
     "openrouter": ("https://openrouter.ai/api/v1/chat/completions", "OPENROUTER_API_KEY"),
 }
 
+# Free-tier request-size ceilings (characters of the user message). The full
+# daily context embeds many full article bodies + filing excerpts, which pushed
+# the Groq request past its gateway body limit → HTTP 413 (Payload Too Large) on
+# every fallback. Trim the TAIL of the user message to fit: the JSON instructions
+# live at the TOP and are always preserved, so only the least-important trailing
+# context (later macro/topic/crypto lines) is dropped. Gemini (1M-token context)
+# needs no cap and is absent here.
+_MAX_USER_CHARS = {"groq": 24000, "openrouter": 48000}
+
 
 def _openai_style(provider: str, system: str, user: str, model: str,
                   json_mode: bool = True) -> str:
@@ -129,6 +154,11 @@ def _openai_style(provider: str, system: str, user: str, model: str,
     key = os.environ.get(env)
     if not key:
         raise ProviderError(f"{env} not set")
+
+    cap = _MAX_USER_CHARS.get(provider)
+    if cap and len(user) > cap:
+        user = user[:cap] + "\n\n[context truncated to fit this provider's request-size limit]"
+
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     body = {
         "model": model,
@@ -136,17 +166,20 @@ def _openai_style(provider: str, system: str, user: str, model: str,
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
     }
-    # Only force JSON output when the caller actually wants JSON — Groq rejects
-    # json_object mode (HTTP 400) when the prompt doesn't ask for JSON, which
-    # silently killed every prose call (e.g. the debate bull/bear cases).
-    if json_mode:
+    # Only force JSON output when the caller wants JSON AND the provider reliably
+    # supports it. Groq honours response_format=json_object; many of OpenRouter's
+    # ":free" community models do NOT and reject it with HTTP 400 — which killed
+    # every OpenRouter fallback. For those we rely on the "Return ONLY a JSON
+    # object" instruction in the prompt plus parse_json()'s json-repair pass.
+    if json_mode and provider == "groq":
         body["response_format"] = {"type": "json_object"}
 
     def call():
         r = requests.post(endpoint, headers=headers, json=body, timeout=90)
         if r.status_code == 429:
             raise ProviderError(f"{provider} rate limited (429)")
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise ProviderError(f"{provider} HTTP {r.status_code}: {r.text[:400]}")
         return r.json()["choices"][0]["message"]["content"]
 
     return _retry(call)
@@ -210,16 +243,27 @@ def normalize_text_fields(obj):
 
 
 def parse_json(text: str) -> dict:
-    """Robustly pull a JSON object out of a model response."""
+    """Robustly pull a JSON object out of a model response.
+
+    Free LLMs constantly emit *nearly* valid JSON: unescaped quotes inside a
+    free-text bullet (`"summary": "CEO said "beat" ..."`), a dropped delimiter,
+    a trailing comma, or a tail cut off at the token limit. Any of these made
+    json.loads() raise and — because analyze() treats that as a provider failure
+    — the whole run silently fell through to the local heuristic. So after the
+    cheap cleanups we hand the blob to json-repair, which fixes exactly this
+    class of near-miss and lets the AI result actually be used.
+    """
     text = (text or "").strip()
     if text.startswith("```"):
         text = text.split("```", 2)[1]
         if text.startswith("json"):
             text = text[4:]
     start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end == -1:
+    if start == -1:
         raise ValueError("no JSON object in model response")
-    blob = text[start:end + 1]
+    # If there's no closing brace at all (hard truncation), keep everything from
+    # the first '{' so the repairer can still balance and salvage it.
+    blob = text[start:end + 1] if end != -1 else text[start:]
     try:
         return json.loads(blob)
     except json.JSONDecodeError:
@@ -227,4 +271,17 @@ def parse_json(text: str) -> dict:
         import re
         cleaned = "\n".join(l for l in blob.splitlines() if not l.strip().startswith("//"))
         cleaned = re.sub(r",\s*([}\]])", r"\1", cleaned)
-        return json.loads(cleaned)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            # Last resort: tolerant repair (unescaped quotes, missing delimiters,
+            # truncated tails). Repair the widest slice (from the first '{' to the
+            # end) so a truncated response is balanced rather than clipped short.
+            try:
+                from json_repair import repair_json
+            except ImportError:
+                raise
+            obj = repair_json(text[start:], return_objects=True)
+            if not isinstance(obj, dict):
+                raise ValueError("json-repair produced a non-object")
+            return obj
