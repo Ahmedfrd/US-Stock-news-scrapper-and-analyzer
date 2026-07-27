@@ -220,9 +220,23 @@ SYSTEM = (
     "the fund level. "
     "Use ONLY the data provided; never invent numbers. Be SPECIFIC and QUANTITATIVE — "
     "cite concrete figures (price %, index/commodity levels from the market flags, deal "
-    "sizes, targets) in the macro, sector and industry sections. FORMAT: write every "
+    "sizes, targets) in the macro, sector and industry sections. "
+    "CRITICAL — WHY, NOT JUST WHAT: a number with no cause is useless to this reader. "
+    "For EVERY move you mention (a stock, an index, a sector, an ETF, or one of an ETF's "
+    "holdings) your PRIMARY job is to explain the SPECIFIC CATALYST behind it, taken from "
+    "the article text — the deal and its size, the guidance/EPS/revenue figure, the "
+    "lawsuit or ruling, the economic report, the analyst upgrade/downgrade and new target, "
+    "the product launch, the management quote. NEVER explain a move with empty filler like "
+    "'broader market sentiment', 'profit-taking', 'sector rotation', 'sector weakness', "
+    "'market dynamics', or 'investors reacted' UNLESS an article explicitly names that as "
+    "the cause — those phrases are NON-ANSWERS and are worse than saying nothing. If the "
+    "provided articles genuinely do not explain a move, say so plainly (e.g. 'no clear "
+    "catalyst in today's coverage — the move looks technical/flow-driven') instead of "
+    "inventing a vague reason. Lead each bullet with the WHY. "
+    "FORMAT: write every "
     "multi-sentence free-text field as newline-separated bullet lines, each starting "
-    "with '- ' and stating ONE point with its figures — never a dense paragraph. "
+    "with '- ' and stating ONE point — lead with the reason/catalyst, then the figures "
+    "that quantify it — never a dense paragraph. "
     "This is informational analysis, NOT investment advice."
 )
 
@@ -259,12 +273,12 @@ def _instructions(tickers, topics, weekly, shariah=False):
       "earnings": {{"result": "beat/miss/inline with the numbers, or empty",
                     "outlook": "guidance/outlook from filing, or empty",
                     "management_review": "management's commentary from the filing, or empty"}},
-      "etf": {{"move_explainer": "for a FUND only: what drove today's move — attribute to specific holdings and sectors using the contribution figures, plus any macro driver; else empty",
+      "etf": {{"move_explainer": "for a FUND only: what drove today's move. Name the specific holdings AND — this is the point — the actual NEWS/CATALYST behind each big contributor's move (the deal, earnings figure, downgrade, ruling from that holding's article text), not just 'holding X contributed -0.4 pts'. The contribution figures quantify it; the news explains it. Else empty",
                "nav_read": "premium/discount to NAV and what it implies; else empty",
                "vs_market": "how it's performing vs the benchmark across horizons; else empty",
                "vs_peers": "how it compares to the peer ETFs (returns/expense/yield/size); else empty",
                "risks": "key risks: concentration, volatility, sector/rate sensitivity, beta; else empty",
-               "holdings_news_impact": "for EACH major holding with news, the actual SUBSTANCE from its article content (what specifically happened — a product launch, earnings beat/miss with numbers, a lawsuit, a downgrade — and why) and how that concretely feeds through to the fund; never just 'holding X was up/down Y%' or a restated headline — else empty"}},
+               "holdings_news_impact": "for EACH major holding with news, LEAD WITH THE NEWS: the actual SUBSTANCE from its article content — what specifically happened (a product launch, an earnings beat/miss with the numbers, a deal and its size, a lawsuit, an upgrade/downgrade with the new target, a management statement) and WHY it matters — then how it feeds through to the fund. NEVER write just 'holding X was up/down Y%, possibly due to broader rotation/profit-taking' — that is a non-answer; if the article doesn't explain the move, say the driver is unclear. Restated headlines are not allowed — else empty"}},
       "technical_read": {{"call": "buy|accumulate|hold|reduce|sell",
                "rationale": "YOUR interpretation of the technicals ALONE (RSI/MACD/moving averages/ATR/volume/support-resistance). You may agree or disagree with the rule-based signal provided — if you override it, say why (e.g. overbought RSI inside a strong uptrend is momentum, not a sell)"}},
       "key_drivers": ["short phrase"]}}

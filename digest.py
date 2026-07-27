@@ -494,7 +494,11 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     fil=fils.get(tk)
     if fil: H.append(f'<div style="font-size:15px;margin-bottom:6px">📄 <a href="{_esc(fil["url"])}" style="color:#3367d6">{_esc(fil["form"])} filed {_esc(fil["filed"])}</a></div>')
 
-    # ---- 5) NEWS ARTICLES — visible, the source list behind the summary above ----
+    # ---- 5) DEBATE — research verdict + bull vs bear ----
+    H.append(_debate_panel(s))
+
+    # ---- 6) NEWS ARTICLES — the source list, LAST in the card (per user request:
+    #         sources sit at the very end, after the analysis + verdict) ----
     if is_etf:
         hn=(extras.get("etf_holding_news") or {}).get(tk,{})
         hitems=[a for arts in hn.values() for a in arts]
@@ -504,8 +508,6 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     else:
         H.append(_links_list(by_group.get(tk, []),label="Sources & full articles",limit=8))
 
-    # ---- 6) DEBATE — research verdict + bull vs bear, LAST (news is the priority) ----
-    H.append(_debate_panel(s))
     H.append("</div>")
     return "".join(H)
 
