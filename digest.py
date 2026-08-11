@@ -322,6 +322,61 @@ def _wrap(title, dated, banner_html, body):
 # --------------------------------------------------------------------------- #
 #  Shared full stock/ETF card
 # --------------------------------------------------------------------------- #
+def _component_news(tk, etf_an, extras):
+    """One block PER COMPONENT COMPANY of a fund: its weight and today's move,
+    the news on that company specifically, what it means for the fund, and its
+    own article links. A fund is a basket of companies — the reader wants those
+    companies covered individually, not blended into a single fund paragraph."""
+    hn=(extras.get("etf_holding_news") or {}).get(tk,{}) or {}
+    ai={}
+    for e in (etf_an.get("holdings_news") or []):
+        if isinstance(e,dict) and e.get("symbol"):
+            ai[str(e["symbol"]).strip().upper()]=e
+    prof=(extras.get("etf") or {}).get(tk)
+    holds=list(prof.holdings) if prof else []
+    order=[h.symbol for h in holds]
+    for sym in list(hn)+list(ai):
+        if sym not in order: order.append(sym)
+    by_sym={h.symbol:h for h in holds}
+
+    blocks=[]
+    for sym in order:
+        u=str(sym).strip().upper()
+        a=ai.get(u) or {}
+        arts=hn.get(sym) or hn.get(u) or []
+        if not a and not arts:
+            continue
+        h=by_sym.get(sym)
+        name=a.get("company") or (h.name if h and h.name else "")
+        head=(f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+              f'<span style="font-weight:700;font-size:16px">{_esc(sym)}'
+              + (f' <span style="color:#9aa0a6;font-weight:400;font-size:14px">{_esc(name[:40])}</span>' if name else "")
+              + '</span>'+(_sent_pill(a.get("call")) if a.get("call") else "")+'</div>')
+        stats=[]
+        if h is not None:
+            if h.weight is not None: stats.append(f'{(h.weight*100):.1f}% of fund')
+            if h.ret_1d is not None: stats.append(f'1d {_pct_span(h.ret_1d)}')
+            if h.contribution is not None: stats.append(f'{h.contribution:+.3f} pts of the fund move')
+        if stats:
+            head+=f'<div style="font-size:14px;color:#5f6368;margin:2px 0">{" · ".join(stats)}</div>'
+        body=""
+        if a.get("news"): body+=_prose(a["news"])
+        if a.get("impact_on_fund"):
+            body+=f'<div style="font-size:15px;color:#3c4043;margin-top:4px"><b>For the fund:</b> {_esc(a["impact_on_fund"])}</div>'
+        if not body and arts:
+            body='<div style="font-size:14px;color:#9aa0a6;margin-top:2px">No AI write-up for this holding this run — headlines below.</div>'
+        links=_links_list(arts,label=f"{sym} news",limit=4) if arts else ""
+        blocks.append(_box(head+body+links,bg="#ffffff",border="#e3e8ef"))
+
+    if not blocks:
+        return ""
+    return ('<div style="margin:10px 0 4px"><div style="font-size:15px;font-weight:700;color:#3367d6;'
+            'text-transform:uppercase;letter-spacing:.4px">Component companies — news by company</div>'
+            '<div style="font-size:14px;color:#9aa0a6;margin-bottom:6px">'
+            "what happened at each major company inside the fund, and what it did to the fund</div>"
+            +"".join(blocks)+'</div>')
+
+
 def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     f=funds.get(tk); e=(extras.get("earnings") or {}).get(tk) or {}
     sg=(extras.get("sentiment") or {}).get(tk,{}); cw=(extras.get("crowd") or {}).get(tk,{})
@@ -384,9 +439,15 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     etf_an=s.get("etf") or {}
     if is_etf and (etf_an.get("move_explainer") or etf_an.get("holdings_news_impact")):
         inner=""
-        for key,lab in [("move_explainer","What moved it today"),("holdings_news_impact","Holdings news & impact")]:
+        for key,lab in [("move_explainer","What moved it today"),("holdings_news_impact","Across the holdings")]:
             if etf_an.get(key): inner+=f'<div style="margin:4px 0;font-size:15px"><b>{lab}:</b>{_prose(etf_an[key])}</div>'
         H.append(_box(inner,bg="#eef3fb",border="#d5e2f7"))
+
+    # The point of holding a fund is the companies inside it — so each major
+    # component company gets its OWN block: what happened to that company, what
+    # it means for the fund, and its own article links.
+    if is_etf:
+        H.append(_component_news(tk,etf_an,extras))
 
     # ---- 2) CROWD sentiment ----
     H.append(_crowd_panel(cw))
@@ -500,10 +561,8 @@ def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
     # ---- 6) NEWS ARTICLES — the source list, LAST in the card (per user request:
     #         sources sit at the very end, after the analysis + verdict) ----
     if is_etf:
-        hn=(extras.get("etf_holding_news") or {}).get(tk,{})
-        hitems=[a for arts in hn.values() for a in arts]
-        if hitems:
-            H.append(_links_list(hitems,label="News on major holdings",limit=16,prefix_group=True))
+        # Each component company's own headlines are shown with that company
+        # above, so only the fund's own news belongs down here.
         H.append(_links_list(by_group.get(tk, []),label="ETF / fund news",limit=8))
     else:
         H.append(_links_list(by_group.get(tk, []),label="Sources & full articles",limit=8))
@@ -627,9 +686,31 @@ def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reas
             B.append(_box(f'<div style="display:flex;justify-content:space-between;align-items:center">'
                           f'<span style="font-weight:700;font-size:17px">{_esc(sec.get("sector",""))}</span> {_sent_pill(sec.get("call"))}</div>{pts}'))
 
+    # What the whole-market scan turned up — the pool the watch list was drawn
+    # from. Shown so you can see the names that were considered, not just picked.
+    cands=extras.get("candidates") or []
+    if cands:
+        covered={(s.get("ticker") or "").upper() for s in (watch_analysis or {}).get("stocks", [])}
+        rows=""
+        for c in cands[:15]:
+            mark="✓" if c["ticker"].upper() in covered else "·"
+            move=_pct_span(c.get("pct_1d")) if c.get("pct_1d") is not None else ""
+            vol=f' <span style="color:#9aa0a6;font-size:13px">{c["vol_ratio"]}x vol</span>' if c.get("vol_ratio") else ""
+            rows+=(f'<tr><td style="padding:4px 8px 4px 0;white-space:nowrap;vertical-align:top">'
+                   f'<span style="color:#9aa0a6">{mark}</span> <b>{_esc(c["ticker"])}</b></td>'
+                   f'<td style="padding:4px 8px 4px 0;white-space:nowrap;vertical-align:top">{move}{vol}</td>'
+                   f'<td style="padding:4px 0;font-size:14px;color:#3c4043">'
+                   f'<a href="{_esc(c.get("url",""))}" style="color:#1a40b0;text-decoration:underline">{_esc(c.get("headline",""))}</a>'
+                   f' <span style="color:#9aa0a6">— {_esc(c.get("source",""))}</span></td></tr>')
+        B.append(_h2("Whole-market scan", f"{len(cands)} companies outside your portfolio that were "
+                                          f"in today's news — ✓ = taken forward for full analysis"))
+        B.append(_box(f'<table style="border-collapse:collapse;width:100%">{rows}</table>'))
+
     ws=watch_analysis.get("stocks", []) if watch_analysis else []
     if ws:
         wsub = "full analysis — news, technicals + research verdict"
+        if extras.get("candidates"):
+            wsub = ("scanned across the whole US market, not just your portfolio · " + wsub)
         if extras.get("shariah"):
             wsub += " · Shariah-screened"
         B.append(_h2("Stocks to watch", wsub))
@@ -743,6 +824,13 @@ def _stock_text(tk,s,funds,extras,by_group):
              f"buzz {con.get('buzz','n/a')}, {ment} mentions, {len((cw or {}).get('sources',{}))} sources)")
     L.append(f"  {s.get('summary','')}")
     if s.get("news_impact"): L.append(f"  NEWS IMPACT: {s['news_impact']}")
+    for e in ((s.get("etf") or {}).get("holdings_news") or []):
+        if not isinstance(e,dict) or not e.get("symbol"): continue
+        L.append(f"  COMPONENT {e['symbol']}"+(f" ({e.get('company')})" if e.get("company") else "")
+                 +(f" [{e['call']}]" if e.get("call") else ""))
+        for ln in str(e.get("news","")).splitlines():
+            if ln.strip(): L.append(f"      {ln.strip()}")
+        if e.get("impact_on_fund"): L.append(f"      For the fund: {e['impact_on_fund']}")
     tech=(extras.get("technicals") or {}).get(tk)
     if tech and not tech.error: L.append(f"  TECHNICALS: {tech.signal.upper()} | RSI {tech.rsi} | MACD {tech.macd_hist} | trend {tech.trend} | S/R {tech.support}/{tech.resistance}")
     tr=s.get("technical_read") or {}

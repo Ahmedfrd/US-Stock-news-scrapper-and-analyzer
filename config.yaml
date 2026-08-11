@@ -11,6 +11,9 @@ watchlist:
       # weight: 15          # optional: % of portfolio, for the look-through panel.
       #                     # Add to every holding for real allocation; omit all for equal-weight.
       # peers: [AMD, AVGO]  # optional; auto-filled from Finnhub if omitted
+    - ticker: ELS
+      name: Equity LifeStyle Properties Inc
+      peers: [PLD, EQR]
 
     # ETFs are fully supported (deep fund analysis). List peer ETFs to compare
     # against; the benchmark for relative performance + beta is etf_benchmark below.
@@ -38,7 +41,7 @@ etf_benchmark: SPY
 shariah_only: true
 
 # Crypto highlight in the Market Digest US — MAJOR coins only. Set [] to disable.
-crypto_watch: [BTC, ETH, SOL, XRP, BNB]
+crypto_watch: [BTC, ETH, SOL, XRP, BNB, HYP]
 
 # Global market flags shown at the top (oil, gold, dollar, indices, yields).
 # Omit this key to use the sensible defaults; set to [] to hide the section;
@@ -62,6 +65,35 @@ sources:
   adanos_platforms: [reddit, x, news, polymarket]  # crowd sentiment sources (Adanos)
   max_items_per_query: 8
   lookback_hours: 24
+
+# ---------------------------------------------------------------------------
+# WHOLE-MARKET SCAN — where "stocks to watch" come from.
+# Without this, the digest only ever saw news it fetched for YOUR names, so every
+# recommendation was portfolio-adjacent by construction. This scans the market at
+# large (general wires + broad business RSS + catalyst searches), works out which
+# companies the stories are actually about, prices them, and hands that pool to
+# the AI. Names you have never held can surface purely on their news.
+market_scan:
+  enabled: true
+  finnhub_general: true       # Finnhub /news general feed (needs FINNHUB_API_KEY)
+  finnhub_max: 40
+  broad_feeds: true           # CNBC / Yahoo / MarketWatch / Investing / Seeking Alpha
+  catalyst_search: true       # Google News searches for catalyst-shaped stories
+  # catalyst_queries: []      # override the built-in query list if you want
+  # extra_rss: []             # additional whole-market feeds
+  max_items_per_query: 10
+  max_items: 220              # cap on scanned headlines per run
+  max_candidates: 25          # priced candidate companies handed to the AI
+  min_move_pct: 0             # e.g. 2 to only consider names that moved ≥2% today
+  full_articles_for_top: 8    # read the lead story in FULL for the top N candidates
+  watch_max: 6                # how many stocks-to-watch get the full deep-dive
+  # watch_pool: 12            # candidates fetched to screen from (default 2x watch_max).
+                              # Only matters with shariah_only — spares cover rejections.
+                              # Each spare costs a full data fetch, so keep it modest.
+
+# Per-holding ETF coverage: how many of a fund's top holdings get their own news
+# section (each component company is reported separately, with its own headlines).
+etf_holdings_news: 8
 
 analysis:
   enabled: true

@@ -39,9 +39,15 @@ Everything is free (one optional key adds multi-source crowd sentiment).
 - **Market overview** + **global market flags**.
 - **Sector highlights** — sectors affected by the day's news flow, each
   bullish/bearish/neutral with 3–5 detailed, figure-cited bullets.
-- **Stocks to watch** — AI-surfaced names (usually outside your portfolio),
-  **Shariah-screened** when `shariah_only: true`, each given the *same full
-  analysis* as a holding plus a compliance badge with the debt/cash ratios.
+- **Whole-market scan** — the discovery pool. Every run scans the *entire* US
+  market's news flow (general wires, broad business RSS, catalyst searches),
+  works out which companies the day's stories are actually about, and prices
+  them. The table lists those candidates with their move and lead story, ticking
+  the ones taken forward. See [Whole-market scan](#whole-market-scan) below.
+- **Stocks to watch** — names drawn from that market-wide pool, **not** from
+  your portfolio or your ETFs' holdings, **Shariah-screened** when
+  `shariah_only: true`, each given the *same full analysis* as a holding plus a
+  compliance badge with the debt/cash ratios.
 - **Crypto — major coins** — market call with figure-cited drivers; every coin
   in your `crypto_watch` list gets a combined buy/hold/sell call, price + 1d/7d
   moves, Adanos crowd sentiment, collapsible technicals, and crypto news links.
@@ -80,10 +86,49 @@ News first, noise last — in this order:
 (volatility, max drawdown, beta), NAV premium/discount, expense/yield/AUM,
 **move attribution by holding** (which components drove today's move, with a
 summed "explained move"), sector weights, vs-benchmark and vs-competitor-ETF
-tables. News on the top-8 underlying holdings is queried by company name (so
-foreign constituents like Samsung/SK Hynix are covered properly), grouped per
-holding, plus the fund's own news — both shown as visible link lists at the
-end of the card, same as a regular stock.
+tables — plus the component breakdown below.
+
+#### Component companies — news by company
+
+A fund is a basket of businesses, so ETF cards report it that way. Each of the
+top `etf_holdings_news` holdings (default 8) gets **its own block**:
+
+- the company's name, its **weight in the fund**, its **1-day move**, and how
+  many points of the fund's move it explains;
+- what actually happened at *that company* today — the deal size, guidance
+  figure, lawsuit, upgrade with the new target — read from the article body, not
+  the headline, with a bullish/bearish/neutral call;
+- one line on how it feeds through to the fund;
+- **that company's own article links**, under its own heading.
+
+News is queried by company name (so foreign constituents like Samsung/SK Hynix
+are covered properly). The fund's own news stays at the end of the card. When
+no AI is available, the same per-company blocks are still built from each
+holding's headlines and its measured contribution.
+
+### Whole-market scan
+
+Stocks-to-watch used to be picked out of news the digest had already fetched for
+*your* names — your tickers, your ETFs' holdings, your topics — so every
+suggestion was portfolio-adjacent by construction. It can't be any more. Each
+run now also:
+
+1. **Scans the market at large** — Finnhub's general news wire, broad business
+   RSS (CNBC, Yahoo Finance, MarketWatch, Investing.com, Seeking Alpha), and a
+   dozen catalyst-shaped searches ("stock surges after…", "price target raised",
+   "FDA approval", "merger agreement", "IPO debut", …).
+2. **Resolves companies from the stories** — explicit tickers (`(NASDAQ: ABCD)`,
+   `$ABCD`), the wire's own ticker tags, and company **names** matched against
+   Finnhub's full US symbol directory.
+3. **Prices every candidate** — today's move, 5-day move, and volume vs average,
+   in one batched request — then ranks by coverage and movement.
+4. **Reads the lead story in full** for the top candidates, so the AI is judging
+   substance rather than a headline.
+
+That pool goes to the AI as the explicit source for stocks-to-watch, and tops up
+the list directly if the model leans on familiar names. Portfolio holdings are
+excluded (they already have their own cards). Everything is tunable under
+`market_scan:` in `config.yaml`; set `enabled: false` to switch it off.
 
 ---
 
@@ -172,23 +217,35 @@ the emails or download the **digest** artifact (contains both HTML reports).
   a UTC weekday name (e.g. `Thu`) makes it weekly instead.
 - `sources.*` — news toggles, `fetch_full_articles`, `relevance_filter`,
   `adanos_platforms` (`[reddit, x, news, polymarket]`), `lookback_hours`.
+- `market_scan.*` — the whole-market discovery pass behind stocks-to-watch:
+  `enabled`, `finnhub_general`, `broad_feeds`, `catalyst_search`,
+  `catalyst_queries` (override the built-in list), `max_candidates`,
+  `min_move_pct` (e.g. `2` to only consider names that moved ≥2%),
+  `full_articles_for_top`, `watch_max`.
+- `etf_holdings_news` — how many of a fund's top holdings get their own news
+  section (default 8).
 - `analysis` — AI chain: gemini → groq → openrouter → heuristic.
 - `delivery` — email / telegram / both / none.
 
 ## Pipeline
 1. **Collect** news (Finnhub first for direct links; Google News; macro feeds) →
    relevance-filter noise → read full articles.
-2. **Portfolio data** — fundamentals, technicals, deep ETF analysis, earnings, filings.
-3. **Sentiment + crowd + flags + crypto** — VADER tone, Adanos multi-source crowd,
+2. **Scan the whole market** — general wires + broad RSS + catalyst searches →
+   resolve companies from the stories → price and rank them as candidates.
+3. **Portfolio data** — fundamentals, technicals, deep ETF analysis (including a
+   news pull per component company), earnings, filings.
+4. **Sentiment + crowd + flags + crypto** — VADER tone, Adanos multi-source crowd,
    market snapshot, coin prices/technicals/news.
-4. **Analyse portfolio** (AI) → cards, sector highlights, watch tickers, crypto calls.
-5. **Deep-analyse stocks to watch** — Shariah-screen, fetch their full data, re-analyse.
-6. **Build two reports** → save → email both.
+5. **Analyse portfolio** (AI) → cards, sector highlights, watch tickers, crypto calls.
+6. **Deep-analyse stocks to watch** — drawn from the market-wide pool,
+   Shariah-screened, full data fetched, re-analysed.
+7. **Build two reports** → save → email both.
 
 ## Module map
 ```
 config.yaml       watchlist + settings (no secrets)
-sources.py        news collection + relevance filter + full-article reading
+sources.py        news collection + whole-market scan + relevance filter + full articles
+discovery.py      market-wide candidate discovery: stories -> companies -> priced movers
 fundamentals.py   yfinance fundamentals + factor scores (+ ETF detection, debt/cash)
 etf.py            deep ETF analysis: returns, attribution, NAV, risk, peers
 technicals.py     RSI/MACD/ATR/SMA-EMA/volume/S-R + rule-based signal (stocks & crypto)

@@ -29,7 +29,7 @@ _DEFAULT_ROLES = {"bull": "groq", "bear": "openrouter", "judge": "gemini"}
 _BULL_SYS = (
     "You are a BULL-side equity researcher. Build the STRONGEST evidence-based "
     "case FOR this security using only the data provided (fundamentals, technicals, "
-    "news, crowd sentiment). Cite concrete figures. 4-6 tight bullet points. Be "
+    "news, crowd sentiment). Cite concrete figures and cross-check facts and figures. 4-6 tight bullet points. Be "
     "persuasive but honest — no invented numbers. This is advocacy, not a balanced view."
 )
 _BEAR_SYS = (
@@ -47,7 +47,7 @@ _JUDGE_SYS = (
     "through anything neither analyst raised. You may reach a conclusion that neither the "
     "bull nor the bear argued — that is welcome. "
     "Base your call ONLY on CATALYSTS, FUNDAMENTALS, EARNINGS and NEWS — the real drivers "
-    "of the business and the stock's story. IGNORE all technical indicators (RSI, MACD, "
+    "of the business and the stock's story but focus more on Catalysts. IGNORE all technical indicators (RSI, MACD, "
     "moving averages, price-vs-SMA, support/resistance, chart 'signals'); if either "
     "analyst leaned on technicals, disregard that part of their case. A move's technicals "
     "are noise here — the WHY behind the fundamentals and news is what matters. "
@@ -62,8 +62,8 @@ _JUDGE_SYS = (
     "\"start_here\":\"one line: what the reader should investigate first\"}"
 )
 _SINGLE_SYS = (
-    "You are a senior fund analyst issuing an OPENING-RESEARCH read on a fund/ETF "
-    "(a starting direction, not advice), using only the data provided (holdings, "
+    "You are a senior fund analyst issuing an RESEARCH read on a fund/ETF "
+    ", using only the data provided (holdings, "
     "flows, technicals, crowd sentiment, news). This is a direct assessment, not a "
     "debate — weigh the evidence yourself and give a balanced, evidence-based call. "
     "Cite concrete figures. Respond ONLY with JSON, no prose:\n"

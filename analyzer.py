@@ -107,15 +107,27 @@ def _build_context(items, funds, extras, watchlist) -> str:
                     for pe in prof.peers:
                         out.append(f"    {pe.ticker}: 1y {pe.ret_1y}%, expense {pe.expense}, "
                                    f"yield {pe.etf_yield}, AUM {pe.aum}")
-            # News on major underlying holdings
+            # News on major underlying holdings — reported PER COMPANY. The reader
+            # wants the ETF broken down into its big component companies, each
+            # with its own news, not one blended paragraph about "the holdings".
             hn = (extras.get("etf_holding_news") or {}).get(tk, {})
+            wt_by_sym = {h.symbol: h for h in (prof.holdings if prof else [])}
+            if hn:
+                out.append(f"  --- NEWS ON {tk}'s COMPONENT COMPANIES (write ONE separate "
+                           f"entry per company in etf.holdings_news) ---")
             for sym, arts in hn.items():
-                if arts:
-                    out.append(f"  news on holding {sym} (read the content for the actual "
-                               f"reason behind its move, not just the headline):")
-                    for a in arts[:4]:
-                        snip = (a.summary[:1400] + "…") if len(a.summary or "") > 1400 else (a.summary or "")
-                        out.append(f"    - {a.title} [{a.source}]" + (f"\n      {snip}" if snip else ""))
+                if not arts:
+                    continue
+                h = wt_by_sym.get(sym)
+                head = f"  COMPONENT {sym}"
+                if h is not None:
+                    head += (f" ({h.name}) — weight {round((h.weight or 0)*100,1)}%, "
+                             f"1d {h.ret_1d}%, contributes {h.contribution} pts to the fund")
+                out.append(head + " — its news (read the CONTENT for the real reason behind "
+                                  "its move, not just the headline):")
+                for a in arts[:4]:
+                    snip = (a.summary[:1400] + "…") if len(a.summary or "") > 1400 else (a.summary or "")
+                    out.append(f"    - {a.title} [{a.source}]" + (f"\n      {snip}" if snip else ""))
         elif f:
             out.append(_fund_block(f))
         sg = sent.get(tk)
@@ -178,6 +190,39 @@ def _build_context(items, funds, extras, watchlist) -> str:
             for it in arts[:12]:
                 out.append(f"    - {it.title} [{it.source}]")
 
+    # ---- WHOLE-MARKET DISCOVERY POOL -------------------------------------- #
+    # Candidates found by scanning the entire market's news flow, NOT the
+    # portfolio. This is the pool stocks_to_watch should be drawn from so the
+    # recommendations aren't confined to names the reader already owns.
+    cands = extras.get("candidates") or []
+    if cands:
+        out.append("\n=== MARKET-WIDE CANDIDATES (companies in TODAY'S news across the WHOLE "
+                   "US market — NONE of these are portfolio holdings; this is the pool to "
+                   "pick stocks_to_watch from) ===")
+        for c in cands:
+            bits = [f"  {c['ticker']}"]
+            if c.get("price") is not None:
+                bits.append(f"price {c['price']}")
+            if c.get("pct_1d") is not None:
+                bits.append(f"1d {c['pct_1d']:+.2f}%")
+            if c.get("pct_5d") is not None:
+                bits.append(f"5d {c['pct_5d']:+.2f}%")
+            if c.get("vol_ratio") is not None:
+                bits.append(f"vol {c['vol_ratio']}x avg")
+            bits.append(f"{c.get('mentions', 1)} stor{'y' if c.get('mentions',1)==1 else 'ies'}")
+            out.append(", ".join(bits) + ":")
+            for a in (c.get("articles") or [])[:3]:
+                snip = (a.summary or "")[:900]
+                out.append(f"    - {a.title} [{a.source}]" + (f"\n      {snip}" if snip else ""))
+
+    scan_items = extras.get("market_scan") or []
+    if scan_items:
+        out.append("\n=== MARKET-WIDE NEWS FLOW (whole-market wires & catalyst searches — "
+                   "use for sector calls and for spotting names not listed above) ===")
+        for it in scan_items[:40]:
+            snip = (it.summary or "")[:500]
+            out.append(f"    - {it.title} [{it.source}]" + (f"\n      {snip}" if snip else ""))
+
     crypto = extras.get("crypto") or {}
     if crypto.get("snapshot") or crypto.get("news"):
         out.append("\n=== CRYPTO (major coins) ===")
@@ -214,10 +259,18 @@ SYSTEM = (
     "well: (1) judge the IMPACT of news on the company using its financials; (2) give "
     "a TECHNICAL read (buy/hold/sell) that is YOUR interpretation of the indicators — "
     "you may override the rule-based signal with reasoning; (3) from ALL the day's "
-    "headlines across the watchlist, macro and topics, identify the SECTORS affected, "
-    "the effect, and a bullish/bearish call with reasons — plus specific STOCKS TO "
-    "WATCH (may be outside the portfolio) with a one-line why. For ETFs analyse at "
-    "the fund level. "
+    "headlines across the watchlist, macro, topics AND the whole-market scan, identify "
+    "the SECTORS affected, the effect, and a bullish/bearish call with reasons — plus "
+    "specific STOCKS TO WATCH with a one-line why. "
+    "STOCKS TO WATCH ARE A WHOLE-MARKET JOB, NOT A PORTFOLIO JOB: you are given a "
+    "MARKET-WIDE CANDIDATES block listing companies from across the entire US market "
+    "that are in today's news, with their price moves — none of them are holdings. "
+    "Draw your picks primarily from there. Do NOT confine yourself to the reader's "
+    "holdings, to the companies inside their ETFs, or to their listed topics; a name "
+    "the reader has never owned is exactly what this section is for. "
+    "For an ETF, analyse at the fund level AND break it down into its COMPONENT "
+    "COMPANIES: give each major holding with news its own separate entry explaining "
+    "what happened to THAT company and how it feeds through to the fund. "
     "Use ONLY the data provided; never invent numbers. Be SPECIFIC and QUANTITATIVE — "
     "cite concrete figures (price %, index/commodity levels from the market flags, deal "
     "sizes, targets) in the macro, sector and industry sections. "
@@ -278,7 +331,11 @@ def _instructions(tickers, topics, weekly, shariah=False):
                "vs_market": "how it's performing vs the benchmark across horizons; else empty",
                "vs_peers": "how it compares to the peer ETFs (returns/expense/yield/size); else empty",
                "risks": "key risks: concentration, volatility, sector/rate sensitivity, beta; else empty",
-               "holdings_news_impact": "for EACH major holding with news, LEAD WITH THE NEWS: the actual SUBSTANCE from its article content — what specifically happened (a product launch, an earnings beat/miss with the numbers, a deal and its size, a lawsuit, an upgrade/downgrade with the new target, a management statement) and WHY it matters — then how it feeds through to the fund. NEVER write just 'holding X was up/down Y%, possibly due to broader rotation/profit-taking' — that is a non-answer; if the article doesn't explain the move, say the driver is unclear. Restated headlines are not allowed — else empty"}},
+               "holdings_news": [{{"symbol": "NVDA", "company": "NVIDIA Corp",
+                    "news": "2-4 bullet lines (each starting '- ') covering THIS ONE COMPONENT COMPANY on its own: the actual SUBSTANCE from its article content — what specifically happened (a product launch, an earnings beat/miss with the numbers, a deal and its size, a lawsuit, an upgrade/downgrade with the new target, a management statement) and WHY. NEVER write just 'it was up/down Y%, possibly due to broader rotation/profit-taking' — that is a non-answer; if the articles don't explain the move, say the driver is unclear",
+                    "impact_on_fund": "1 line: how this company's news feeds through to the fund given its weight and contribution",
+                    "call": "bullish|bearish|neutral"}}],
+               "holdings_news_impact": "OPTIONAL one-paragraph roll-up across the components — only if it adds something the per-company entries above don't; else empty"}},
       "technical_read": {{"call": "buy|accumulate|hold|reduce|sell",
                "rationale": "YOUR interpretation of the technicals ALONE (RSI/MACD/moving averages/ATR/volume/support-resistance). You may agree or disagree with the rule-based signal provided — if you override it, say why (e.g. overbought RSI inside a strong uptrend is momentum, not a sell)"}},
       "key_drivers": ["short phrase"]}}
@@ -289,7 +346,8 @@ def _instructions(tickers, topics, weekly, shariah=False):
   ],
   "stocks_to_watch": [
     {{"ticker": "NVDA", "call": "bullish|bearish|neutral",
-      "reason": "one line: the catalyst and why it matters (may be outside the portfolio)"}}
+      "reason": "one line: the specific catalyst from today's news and why it matters",
+      "source": "market-scan|portfolio-adjacent — where the idea came from"}}
   ],{shariah_line}
   "crypto_highlight": {{"call": "bullish|bearish|neutral",
       "points": ["2-4 DETAILED bullets on the crypto market with figures (BTC/ETH levels & % moves from the data, ETF flows, dominance, catalysts)"],
@@ -309,14 +367,26 @@ Topics: {', '.join(topics)}
 Fill "earnings" only when earnings/filing data is present; otherwise use empty strings.
 The "stocks" array MUST contain one entry for EVERY name listed under Stocks above —
 ETFs/funds included; never omit a name.
-stocks_to_watch MUST be US-listed tickers only (NYSE/NASDAQ symbols) — never use
-foreign-exchange suffixes like .KS/.T/.AS/.DE/.PA/.L/.TO/.HK; if the catalyst concerns
-a foreign company, use its US-listed ADR (e.g. TSM, ASML) or leave it out.
-For stocks_to_watch, pick names the reader should GENUINELY consider trading on
-today's news — mid-caps are welcome, not just mega-caps. Prioritise a concrete
-near-term catalyst (earnings, guidance, upgrades/downgrades, deals, regulatory,
-product news) where the price change is actionable SHORT-TERM; long-term merit is
-a bonus, not a requirement.
+For every ETF/fund, etf.holdings_news MUST contain a SEPARATE entry for EACH
+component company that has news in the data — one per company, never merged into
+a single blended paragraph. Cover every component listed under "NEWS ON ...
+COMPONENT COMPANIES"; that per-company breakdown is the main reason the reader
+holds the fund in this report.
+
+STOCKS TO WATCH — SCAN THE WHOLE MARKET, NOT THE PORTFOLIO:
+- Give 5-8 names. Source them PRIMARILY from the MARKET-WIDE CANDIDATES block and
+  the MARKET-WIDE NEWS FLOW — i.e. companies from anywhere in the US market that
+  are in today's news. At least 4 picks MUST have no connection to the reader's
+  holdings, their ETFs' holdings, or their listed topics.
+- Never fill this section with the reader's own holdings or their ETFs'
+  constituents just because those names are familiar or well-covered in the data.
+- Mid-caps and small-caps are welcome, not just mega-caps.
+- Prioritise a concrete near-term catalyst (earnings, guidance, upgrades/
+  downgrades, deals, regulatory/FDA, product news) where the price change is
+  actionable SHORT-TERM; long-term merit is a bonus, not a requirement.
+- MUST be US-listed tickers only (NYSE/NASDAQ symbols) — never use foreign-exchange
+  suffixes like .KS/.T/.AS/.DE/.PA/.L/.TO/.HK; if the catalyst concerns a foreign
+  company, use its US-listed ADR (e.g. TSM, ASML) or leave it out.
 Only include topics/sectors that have data. Return STRICTLY valid JSON — no comments,
 no trailing commas. Keep it tight."""
 
@@ -367,6 +437,57 @@ def _heur_combined(tech):
                          + " — combine with fundamentals & news above. (Rule-based; enable AI for a fuller call.)"}
 
 
+def _heur_watch(extras, stocks):
+    """No-LLM path: pick stocks to watch from the WHOLE-MARKET candidate scan
+    (companies in today's news anywhere in the market), ranked by how much news
+    they drew and how far they moved. Portfolio names are the fallback only."""
+    out = []
+    for c in (extras.get("candidates") or [])[:6]:
+        pct = c.get("pct_1d")
+        call = "bullish" if (pct or 0) > 1.5 else "bearish" if (pct or 0) < -1.5 else "neutral"
+        why = f"{c.get('mentions', 1)} stor{'y' if c.get('mentions',1)==1 else 'ies'} today"
+        if pct is not None:
+            why += f", {pct:+.2f}%"
+        if c.get("vol_ratio"):
+            why += f" on {c['vol_ratio']}x average volume"
+        out.append({"ticker": c["ticker"], "call": call,
+                    "reason": f"{why} — {c.get('headline','')}",
+                    "source": "market-scan"})
+    if out:
+        return out
+    return [{"ticker": s["ticker"], "call": s["sentiment"], "source": "portfolio-adjacent",
+             "reason": f"technical {s['combined_call']['call']}, {s['impact']} news impact"}
+            for s in stocks
+            if s["combined_call"]["call"] in ("buy", "accumulate", "reduce", "sell")][:6]
+
+
+def _heur_holdings_news(tk, extras):
+    """No-LLM path: still break an ETF down per component company, using each
+    holding's own headlines + its measured contribution to the fund's move."""
+    hn = (extras.get("etf_holding_news") or {}).get(tk) or {}
+    if not hn:
+        return []
+    prof = (extras.get("etf") or {}).get(tk)
+    by_sym = {h.symbol: h for h in (prof.holdings if prof else [])}
+    out = []
+    for sym, arts in hn.items():
+        if not arts:
+            continue
+        h = by_sym.get(sym)
+        move = f" moved {h.ret_1d:+.2f}% today" if (h and h.ret_1d is not None) else ""
+        out.append({
+            "symbol": sym,
+            "company": (h.name if h and h.name else sym),
+            "news": "\n".join(f"- {a.title} [{a.source}]" for a in arts[:4]),
+            "impact_on_fund": (f"{sym}{move}"
+                               + (f" at a {round((h.weight or 0)*100,1)}% weight, contributing "
+                                  f"{h.contribution:+.3f} pts to the fund's move."
+                                  if (h and h.contribution is not None) else ".")),
+            "call": "neutral",
+        })
+    return out
+
+
 def _heuristic(items, funds, extras, watchlist):
     by_group = defaultdict(list)
     for it in items:
@@ -411,7 +532,8 @@ def _heuristic(items, funds, extras, watchlist):
                                  else (f"Composite {comp}/100." if comp is not None else "Fundamentals n/a.")),
             "divergence": "", "crowd_note": crowd_note, "bull": "", "bear": "", "earnings": ed,
             "etf": {"move_explainer": "", "nav_read": "", "vs_market": "", "vs_peers": "",
-                    "risks": "", "holdings_news_impact": ""},
+                    "risks": "", "holdings_news_impact": "",
+                    "holdings_news": _heur_holdings_news(tk, extras)},
             "combined_call": _heur_combined((extras.get("technicals") or {}).get(tk)),
             "technical_read": _heur_technical((extras.get("technicals") or {}).get(tk)),
             "key_drivers": [], "_impact_score": impact_score,
@@ -435,10 +557,11 @@ def _heuristic(items, funds, extras, watchlist):
               "macro": {"summary": "See macro headlines below.", "risks": [], "watch": []},
               "sector_highlights": [],
               "crypto_highlight": _heur_crypto(extras.get("crypto") or {}),
-              "stocks_to_watch": [{"ticker": s["ticker"], "call": s["sentiment"],
-                                   "reason": f"technical {s['combined_call']['call']}, {s['impact']} news impact"}
-                                  for s in stocks
-                                  if s["combined_call"]["call"] in ("buy", "accumulate", "reduce", "sell")][:6]}
+              # Whole-market first: candidates discovered by scanning the entire
+              # market's news flow. Only if that scan produced nothing do we fall
+              # back to portfolio names — otherwise the no-LLM path would repeat
+              # the very portfolio-bound behaviour this run is meant to avoid.
+              "stocks_to_watch": _heur_watch(extras, stocks)}
     if extras.get("weekly"):
         result["sectors"] = [{"sector": sec, "summary": f"{len(arts)} developments this week.",
                               "developments": [a.title for a in arts[:4]], "read_across": ""}

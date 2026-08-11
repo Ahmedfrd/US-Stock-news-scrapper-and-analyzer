@@ -28,6 +28,37 @@ MACRO_FEEDS = [
     ("ECB",             "https://www.ecb.europa.eu/rss/press.html"),
 ]
 
+# Broad, whole-market feeds. These are NOT tied to the watchlist — they exist so
+# the digest sees the day's news for companies you don't own, which is where
+# genuinely new "stocks to watch" come from.
+BROAD_FEEDS = [
+    ("CNBC Top News",   "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
+    ("CNBC Markets",    "https://www.cnbc.com/id/20910258/device/rss/rss.html"),
+    ("CNBC Earnings",   "https://www.cnbc.com/id/15839135/device/rss/rss.html"),
+    ("Yahoo Finance",   "https://finance.yahoo.com/news/rssindex"),
+    ("MarketWatch",     "https://feeds.marketwatch.com/marketwatch/topstories/"),
+    ("Investing.com",   "https://www.investing.com/rss/news_25.rss"),
+    ("Seeking Alpha",   "https://seekingalpha.com/market_currents.xml"),
+]
+
+# Catalyst-shaped searches across the WHOLE market. Each targets the kind of
+# story that makes a stock actionable in the short term, regardless of whether
+# the company has anything to do with the portfolio.
+CATALYST_QUERIES = [
+    "stock surges OR soars OR jumps after",
+    "stock plunges OR sinks OR tumbles after",
+    "analyst upgrade price target raised stock",
+    "analyst downgrade price target cut stock",
+    "earnings beat raises guidance shares",
+    "earnings miss cuts guidance shares",
+    "merger OR acquisition OR takeover deal shares",
+    "FDA approval OR clinical trial results shares",
+    "SEC investigation OR lawsuit OR recall shares",
+    "IPO debut shares first day trading",
+    "biggest stock movers today",
+    "52-week high OR breakout stock",
+]
+
 _UA = {"User-Agent": "Mozilla/5.0 (compatible; MarketNewsDigest/1.0)"}
 
 
@@ -39,7 +70,8 @@ class NewsItem:
     published: dt.datetime | None
     summary: str
     group: str            # e.g. "AAPL" or "semiconductor industry"
-    group_type: str       # "stock" | "topic" | "macro"
+    group_type: str       # "stock" | "topic" | "macro" | "market"
+    related: str = ""     # comma-separated tickers the source itself tagged (Finnhub)
 
     def key(self) -> str:
         return (self.title or "").strip().lower()[:120]
@@ -357,6 +389,74 @@ def sector_news(sectors: list[str], lookback_days: int = 7,
                 break
         out[sec] = arts
     return out
+
+
+def market_scan(config: dict) -> list[NewsItem]:
+    """Whole-market news flow, independent of the watchlist.
+
+    Everything else in this module scrapes news FOR names you already care about
+    (your holdings, your ETFs' holdings, your topics). That made "stocks to
+    watch" structurally portfolio-bound: the AI could only recommend companies
+    whose news we had already gone looking for. This function scrapes the market
+    at large — general market wires, broad business RSS, and catalyst-shaped
+    searches — so a company you have never held can surface purely on its news.
+
+    Items come back grouped as "Market scan" / group_type "market".
+    """
+    src = config.get("sources", {}) or {}
+    ms = config.get("market_scan", {}) or {}
+    if not ms.get("enabled", True):
+        return []
+    lookback = int(src.get("lookback_hours", 24))
+    per_query = int(ms.get("max_items_per_query", 10))
+    items: list[NewsItem] = []
+
+    # 1) Finnhub general market news — real publisher links, dated, ticker-tagged.
+    if ms.get("finnhub_general", True):
+        try:
+            import market_data
+            if market_data.enabled():
+                for n in market_data.general_news(max_items=int(ms.get("finnhub_max", 40))):
+                    if not _recent(n.get("published"), lookback):
+                        continue
+                    it = NewsItem(title=n["title"], url=n.get("url", ""),
+                                  source=n.get("source", "Finnhub"),
+                                  published=n.get("published"),
+                                  summary=n.get("summary", ""),
+                                  group="Market scan", group_type="market")
+                    # Finnhub tags its own tickers on general news — free, exact
+                    # candidates that need no name matching at all.
+                    it.related = n.get("related", "")
+                    items.append(it)
+        except ImportError:
+            pass
+
+    # 2) Broad business/market RSS.
+    for name, url in (BROAD_FEEDS if ms.get("broad_feeds", True) else []):
+        items += rss_feed(url, name, "Market scan", "market", per_query, lookback)
+    for url in (ms.get("extra_rss") or []):
+        items += rss_feed(url, "", "Market scan", "market", per_query, lookback)
+
+    # 3) Catalyst searches across the whole market.
+    queries = ms.get("catalyst_queries")
+    if queries is None:
+        queries = CATALYST_QUERIES if ms.get("catalyst_search", True) else []
+    for q in queries:
+        items += google_news(q, "Market scan", "market", per_query, lookback)
+
+    # Dedupe by headline; keep the dated/newest copy.
+    best: dict[str, NewsItem] = {}
+    for it in items:
+        if not it.title:
+            continue
+        k = it.key()
+        cur = best.get(k)
+        if cur is None or (it.published and (cur.published is None or it.published > cur.published)):
+            best[k] = it
+    out = list(best.values())
+    _floor = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+    out.sort(key=lambda it: it.published or _floor, reverse=True)
+    return out[: int(ms.get("max_items", 220))]
 
 
 def collect(config: dict) -> list[NewsItem]:

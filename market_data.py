@@ -65,6 +65,49 @@ def company_news(symbol: str, lookback_days: int = 3, max_items: int = 8):
     return out
 
 
+def general_news(category: str = "general", max_items: int = 40):
+    """Market-WIDE news (not tied to any ticker) from Finnhub's free /news feed.
+    This is the discovery feed: it carries stories about companies you have never
+    held, which is exactly what 'stocks to watch' needs. Returns the same dict
+    shape as company_news()."""
+    data = _get("/news", {"category": category})
+    if not isinstance(data, list):
+        return []
+    out = []
+    for n in data[: max_items * 2]:
+        ts = n.get("datetime")
+        published = dt.datetime.fromtimestamp(ts, tz=dt.timezone.utc) if ts else None
+        title = (n.get("headline") or "").strip()
+        if not title:
+            continue
+        out.append({
+            "title": title,
+            "url": n.get("url", ""),
+            "source": n.get("source", "Finnhub"),
+            "summary": (n.get("summary") or "").strip(),
+            "published": published,
+            "related": (n.get("related") or "").strip(),  # Finnhub's own ticker tags
+        })
+        if len(out) >= max_items:
+            break
+    return out
+
+
+_SYMBOLS_CACHE = None
+
+
+def us_symbols():
+    """The full US-listed symbol directory (free): [{symbol, description, type}].
+    Used to turn company names mentioned in market-wide headlines back into
+    tickers. Cached for the life of the process — it's a ~25k-row payload."""
+    global _SYMBOLS_CACHE
+    if _SYMBOLS_CACHE is not None:
+        return _SYMBOLS_CACHE
+    data = _get("/stock/symbol", {"exchange": "US"})
+    _SYMBOLS_CACHE = data if isinstance(data, list) else []
+    return _SYMBOLS_CACHE
+
+
 def peers(symbol: str, limit: int = 3):
     data = _get("/stock/peers", {"symbol": symbol})
     if not isinstance(data, list):

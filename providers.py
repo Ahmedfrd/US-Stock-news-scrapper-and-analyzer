@@ -225,7 +225,8 @@ def available(provider: str) -> bool:
 _TEXT_FIELDS = {"market_overview", "summary", "news_impact", "fundamental_read",
                 "divergence", "crowd_note", "bull", "bear", "rationale", "reason",
                 "why", "note", "move_explainer", "nav_read", "vs_market", "vs_peers",
-                "risks", "holdings_news_impact", "result", "outlook",
+                "risks", "holdings_news_impact", "news", "impact_on_fund",
+                "result", "outlook",
                 "management_review", "verdict", "read_across",
                 "what_would_change_it", "start_here"}
 

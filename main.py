@@ -36,6 +36,10 @@ except Exception:
 import sources, fundamentals, etf as etf_mod, technicals as tech_mod
 import sentiment, social, analyzer, digest, delivery, portfolio, shariah
 try:
+    import discovery
+except ImportError:
+    discovery = None
+try:
     import pk
 except ImportError:
     pk = None
@@ -134,7 +138,8 @@ def _news_for(tk, name, lookback, max_items, fetch_full=False, full_limit=3):
     return arts
 
 
-def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="US", fetch_full=False):
+def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="US",
+                  fetch_full=False, holdings_n=8):
     """Fetch fundamentals/technicals/earnings/filing/etf + news for one ticker."""
     if market == "PK":
         return {"news": sources.google_news(f'"{tk}" PSX OR "{name}" Pakistan stock',
@@ -142,8 +147,13 @@ def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="
                 "fund": pk.fetch_fundamentals(tk, name),
                 "tech": pk.technicals(tk),
                 "earn": None, "fil": None, "etf": None, "holding_news": {}}
-    data = {"news": _news_for(tk, name, lookback, max_items, fetch_full=fetch_full),
-            "fund": fundamentals.fetch(tk, name),
+    # Fundamentals first: a market-scan candidate arrives as a bare ticker, and a
+    # Google News fallback query on a raw symbol ("PLTR stock") is far weaker than
+    # one on the real company name — so resolve the name before fetching news.
+    fund = fundamentals.fetch(tk, name)
+    data = {"news": _news_for(tk, (fund.name or name or tk), lookback, max_items,
+                              fetch_full=fetch_full),
+            "fund": fund,
             "tech": tech_mod.compute(tk),
             "earn": market_data.earnings_window(tk) if (market_data and market_data.enabled()) else None,
             "fil": filings.latest_filing(tk) if filings else None,
@@ -151,7 +161,7 @@ def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="
     if data["fund"].is_etf:
         prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=peers)
         data["etf"] = prof
-        for h in prof.holdings[:8]:
+        for h in prof.holdings[:holdings_n]:
             arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4, fetch_full=fetch_full, full_limit=1)
             if arts: data["holding_news"][h.symbol] = arts
     return data
@@ -205,10 +215,52 @@ def main():
     config.setdefault("sources", {})["lookback_hours"] = lookback  # so sources.collect() agrees
     max_items = int(config.get("sources", {}).get("max_items_per_query", 8))
     fetch_full = bool(config.get("sources", {}).get("fetch_full_articles", False))
+    holdings_n = int(config.get("etf_holdings_news", 8))
 
     print("[1/6] Collecting news…")
     items = sources.collect(config)
     print(f"      {len(items)} headlines.")
+
+    # ---- Whole-market scan --------------------------------------------------
+    # collect() above only fetches news for names you already care about, so any
+    # "stock to watch" derived from it is portfolio-adjacent by construction.
+    # This scans the market at large and turns the day's stories into priced
+    # candidates, so a company you've never held can surface purely on its news.
+    scan_items, candidates = [], []
+    mscfg = config.get("market_scan", {}) or {}
+    if make_market and mscfg.get("enabled", True):
+        print("[scan] Scanning the WHOLE market for names in today's news…")
+        try:
+            scan_items = sources.market_scan(config)
+            print(f"      {len(scan_items)} market-wide headlines.")
+        except Exception as ex:
+            print(f"      market scan failed ({ex})")
+        if scan_items and discovery:
+            try:
+                candidates = discovery.scan(
+                    scan_items,
+                    exclude=[s.get("ticker", "") for s in stocks],
+                    limit=int(mscfg.get("max_candidates", 25)),
+                    min_move=float(mscfg.get("min_move_pct", 0) or 0))
+                print(f"      {len(candidates)} priced candidates outside the portfolio: "
+                      + ", ".join(c["ticker"] for c in candidates[:12]))
+            except Exception as ex:
+                print(f"      candidate discovery failed ({ex})")
+            # Read the top candidates' lead stories in FULL — a candidate the AI
+            # can only see the headline of gets rejected for lack of substance.
+            if fetch_full:
+                for c in candidates[:int(mscfg.get("full_articles_for_top", 8))]:
+                    for a in (c.get("articles") or [])[:1]:
+                        if not a.url or "news.google.com" in a.url:
+                            continue
+                        body, final_url = sources.fetch_article_text(a.url)
+                        if final_url and "finnhub.io" not in final_url:
+                            a.url = final_url
+                        if body:
+                            a.summary = (a.summary + " " + body).strip()[:3500]
+        items = items + scan_items
+    elif not make_market:
+        print("[scan] Portfolio-only day — skipping the whole-market scan.")
 
     market = (config.get("market") or "US").upper()
     print(f"[2/6] Portfolio data ({market}: fundamentals/technicals"
@@ -236,7 +288,11 @@ def main():
             if funds.get(tk) and funds[tk].is_etf:
                 prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=s.get("peers"))
                 etf_profiles[tk] = prof
-                for h in prof.holdings[:8]:
+                # Every major component company gets its OWN news pull — that
+                # per-company breakdown is the point of holding the fund here.
+                print(f"      {tk}: fetching news for {min(holdings_n, len(prof.holdings))} "
+                      f"component compan(ies)…")
+                for h in prof.holdings[:holdings_n]:
                     arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4, fetch_full=fetch_full, full_limit=1)
                     if arts: etf_hnews.setdefault(tk, {})[h.symbol] = arts
 
@@ -288,6 +344,7 @@ def main():
               "filings": fils, "weekly": weekly, "sector_news": sector_news, "etf": etf_profiles,
               "etf_holding_news": etf_hnews, "technicals": technicals, "flags": flags,
               "crypto": crypto, "region": market,
+              "market_scan": scan_items, "candidates": candidates,
               "look_through": portfolio.look_through(stocks, funds, etf_profiles)}
 
     print("[4/6] Analyzing portfolio…")
@@ -313,9 +370,33 @@ def main():
     if dropped:
         print(f"      dropped non-US listing(s) from stocks-to-watch: {', '.join(dropped)}")
     watch = [w for w in watch if not _is_foreign(w["ticker"])]
+
+    # Top up from the whole-market scan. If the model leaned on familiar
+    # portfolio-adjacent names (or returned too few), the priced candidates from
+    # the market-wide scan fill the rest — that keeps the section genuinely
+    # market-wide rather than a mirror of what's already in the report.
+    watch_max = int(mscfg.get("watch_max", 6))
+    # Pool size, not final count: the Shariah screen below rejects a good share
+    # of market-wide names, so we carry spares. Each spare that gets screened
+    # costs a full data fetch, so keep it modest (Finnhub free tier: 60/min).
+    watch_pool = int(mscfg.get("watch_pool", watch_max * 2))
+    _have = {w["ticker"].upper() for w in watch}
+    for c in candidates:
+        if len(watch) >= watch_pool:
+            break
+        if c["ticker"].upper() in _have or c["ticker"].upper() in {t.upper() for t in port_tickers}:
+            continue
+        if _is_foreign(c["ticker"]):
+            continue
+        _have.add(c["ticker"].upper())
+        pct = c.get("pct_1d")
+        watch.append({"ticker": c["ticker"], "source": "market-scan",
+                      "call": "bullish" if (pct or 0) > 1.5 else "bearish" if (pct or 0) < -1.5 else "neutral",
+                      "reason": (f"In today's market-wide news ({c.get('mentions',1)} stories"
+                                 + (f", {pct:+.2f}%" if pct is not None else "") + f"): {c.get('headline','')}")})
     if not make_market:
         watch = []
-    watch = watch[:6]
+    watch = watch[:watch_pool]
     watch_analysis = {"stocks": []}
     watch_reasons, shariah_res = {}, {}
     if watch:
@@ -324,7 +405,8 @@ def main():
         witems, kept = [], []
         for w in watch:
             tk = w["ticker"].strip()
-            d = _gather_stock(tk, tk, lookback, max_items, benchmark, market=market, fetch_full=fetch_full)
+            d = _gather_stock(tk, tk, lookback, max_items, benchmark, market=market,
+                              fetch_full=fetch_full, holdings_n=holdings_n)
             sc = shariah.screen(d["fund"])
             if shariah_only and sc["status"] == "fail":
                 print(f"      dropped {tk} — {sc['reasons'][0]}")
@@ -335,10 +417,11 @@ def main():
             if d["earn"]: earnings[tk] = d["earn"]
             if d["fil"]: fils[tk] = d["fil"]
             if d["etf"]: etf_profiles[tk] = d["etf"]; etf_hnews[tk] = d["holding_news"]
-            if len(kept) >= 5:
+            if len(kept) >= watch_max:
                 break
         watch = kept
-        watch_reasons = {w["ticker"]: w.get("reason", "") for w in watch}
+        watch_reasons = {w["ticker"]: (("🔎 whole-market scan — " if w.get("source") == "market-scan" else "")
+                                       + w.get("reason", "")) for w in watch}
         wcrowd = {}
         if watch and config.get("sources", {}).get("social", True):
             try:
