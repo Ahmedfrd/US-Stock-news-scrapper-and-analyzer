@@ -590,10 +590,16 @@ def _flags_grid(flags, per_row=4):
         p = fl.get("pct")
         price = fl.get("price")
         ptxt = f"{price:,.2f}" if isinstance(price, (int, float)) else _esc(price)
+        if fl.get("bp") is not None:
+            ptxt += "%"
+            c = _GREEN if fl["bp"] >= 0 else _RED
+            move = f'<span style="color:{c};font-weight:600">{fl["bp"]:+d} bp</span>'
+        else:
+            move = _pct(p) if p is not None else ""
         cells.append(f'<td style="width:{100//per_row}%;padding:7px 6px;border:1px solid #eef0f2;text-align:center;vertical-align:top">'
                      f'<div style="font-size:12px;color:{_GREY}">{_esc(fl["name"])}</div>'
                      f'<div style="font-size:15px;font-weight:700">{ptxt}</div>'
-                     f'<div style="font-size:13px">{_pct(p) if p is not None else ""}</div></td>')
+                     f'<div style="font-size:13px">{move}</div></td>')
     rows = ""
     for i in range(0, len(cells), per_row):
         chunk = cells[i:i + per_row]
@@ -670,7 +676,7 @@ def _thesis_block(p):
     if nc:
         figs.append(_chip("next event", f"{nc['title']} {nc['date']}"))
     rows = ""
-    for key, lab in (("catalyst", "Catalyst"), ("mechanism", "How it reaches the price"), ("priced_in", "Already priced in?"),
+    for key, lab in (("catalyst", "Catalyst"), ("mechanism", "How it reaches the price"), ("priced_in", "Priced in"),
                      ("horizon", "Horizon"), ("invalidation", "What would prove it wrong"), ("before_acting", "Verify first")):
         if th.get(key):
             style = f"background:#fdf2f1;border-radius:5px;padding:3px 6px;" if key == "invalidation" else ""

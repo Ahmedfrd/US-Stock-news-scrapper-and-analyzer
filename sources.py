@@ -74,6 +74,7 @@ _JUNK_TITLE = re.compile(
     r"\b\d+ (?:stocks?|reasons|things|etfs?)\b|prediction:|price prediction|stock forecast|"
     r"could look like|would be worth|if you(?:'d| had)? invested|should you (?:buy|sell)|better buy|"
     r"stock quote|\bnews \| |facts to know before|share price today|share price,? news|"
+    r"how many shares|how much you'?d need|you'?d need to invest|investment narrative|"
     r"is it too late|millionaire|\bretire|"
     r"stock price,? news,? quote|quote (?:&|and) history|historical (?:prices|data)|stock price today|"
     r"risk zones|volatility zones|tactical triggers|precision trading|rules-based execution|"
@@ -377,6 +378,20 @@ def _relevant(item, name_by_ticker) -> bool:
     return False
 
 
+def title_mentions(title: str, ticker: str, name: str = "") -> bool:
+    """Stricter test for names whose news is tagged loosely (mega-cap ETF
+    components): the company must be named in the HEADLINE itself."""
+    title = title or ""
+    if re.search(rf"(?<![A-Za-z]){re.escape(ticker.upper())}(?![A-Za-z])", title):
+        return True
+    low = title.lower()
+    for a in ALIASES.get(ticker.upper(), []):
+        if re.search(rf"\b{re.escape(a.lower())}\b", low):
+            return True
+    words = [w for w in re.split(r"[\s,.()&-]+", (name or "").lower()) if len(w) > 2 and w not in _NAME_STOP]
+    return bool(words) and bool(re.search(rf"\b{re.escape(words[0])}\b", low))
+
+
 # --------------------------------------------------------------------------- #
 #  Orchestrator
 # --------------------------------------------------------------------------- #
@@ -583,6 +598,9 @@ def collect(config: dict) -> list[NewsItem]:
             tmpl = src.get("stock_query", '{name} stock OR "{ticker}"')
             items += google_news(tmpl.format(name=name, ticker=ticker), ticker, "stock",
                                  max_items, lookback)
+            if s.get("aliases"):
+                q = " OR ".join(f'"{a}"' for a in s["aliases"][:3]) + src.get("alias_query_suffix", "")
+                items += google_news(q, ticker, "stock", max_items, lookback)
         if src.get("yahoo_finance", True):
             items += yahoo_news(ticker, max_items, lookback)
 
@@ -705,6 +723,9 @@ def collect_market(config: dict, scan_items: list[NewsItem] | None = None) -> li
         got = []
         for q in ([th["query"]] if isinstance(th.get("query"), str) else (th.get("query") or [])):
             got += google_news(q, label, "theme", per, lookback)
+        if th.get("local") and src.get("local_terms"):
+            # sector/policy themes must actually be about this market
+            got = [it for it in got if _theme_hit(f"{it.title} {(it.summary or '')[:400]}", src["local_terms"])]
         kws = th.get("keywords") or []
         if kws:
             for it in scan_items:

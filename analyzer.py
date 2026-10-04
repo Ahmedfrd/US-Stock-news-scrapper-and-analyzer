@@ -73,8 +73,13 @@ def _arts(arts, cap, snip):
 
 
 def _flags_line(flags):
-    return " | ".join((f"{fl['name']} {fl.get('price')} ({fl['pct']:+.2f}%)" if fl.get("pct") is not None
-                       else f"{fl['name']} {fl.get('price')}") for fl in (flags or []))
+    def one(fl):
+        if fl.get("bp") is not None:
+            return f"{fl['name']} {fl.get('price')}% ({fl['bp']:+d} bp)"
+        if fl.get("pct") is not None:
+            return f"{fl['name']} {fl.get('price')} ({fl['pct']:+.2f}%)"
+        return f"{fl['name']} {fl.get('price')}"
+    return " | ".join(one(fl) for fl in (flags or []))
 
 
 _FMT_RULE = ("FORMAT: every multi-point text field is newline-separated bullet lines, each "
@@ -222,7 +227,9 @@ def _portfolio_instructions(tickers):
 
 Holdings: {', '.join(tickers)}
 "stocks" MUST contain one entry for EVERY holding listed (ETFs included).
-etf.holdings_news: one entry per component that HAS articles in the data — none for components without news.
+etf.holdings_news: one entry per component whose articles contain CONCRETE company news (a result, deal,
+product, ruling, analyst action). Skip components whose articles are only passing mentions — no filler like
+"X is a key player in AI".
 Return STRICTLY valid JSON."""
 
 

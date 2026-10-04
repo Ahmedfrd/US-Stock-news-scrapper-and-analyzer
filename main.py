@@ -117,7 +117,12 @@ def _market_flags(instruments):
     for p in pairs:
         m = moves.get(p["symbol"])
         if m:
-            out.append({"name": p["name"], "symbol": p["symbol"], "price": m["price"], "pct": m["pct_1d"]})
+            row = {"name": p["name"], "symbol": p["symbol"], "price": m["price"], "pct": m["pct_1d"]}
+            if "yield" in p["name"].lower() and m.get("pct_1d") is not None:
+                # a yield's move is quoted in basis points, not as a % of the yield
+                prev = m["price"] / (1 + m["pct_1d"] / 100)
+                row["bp"] = round((m["price"] - prev) * 100)
+            out.append(row)
     return out
 
 
@@ -127,6 +132,9 @@ def _news_for(tk, name, lookback, max_items, fetch_full=False, full_limit=3):
     arts = sources.finnhub_news(tk, max_items, lookback)
     if not arts:
         arts = sources.google_news(f'"{name}" stock OR "{tk}" shares', tk, "stock", max_items, lookback)
+    # Finnhub tags big names onto tangential stories ("How many shares of VOO…");
+    # keep only items that name the company in the headline.
+    arts = [a for a in arts if sources.title_mentions(a.title, tk, name)]
     if fetch_full:
         n = 0
         for a in arts:
@@ -242,7 +250,7 @@ def run_market(config, state_data, args):
     ty = fl.get("10Y yield") or {}
     if ty.get("price") is not None:
         policy_facts.append(("10Y Treasury yield", f"{ty['price']:.2f}%"
-                             + (f" ({ty['pct']:+.2f}% on the day)" if ty.get("pct") is not None else "")))
+                             + (f" ({ty['bp']:+d} bp on the day)" if ty.get("bp") is not None else "")))
     extras = {"region": "US", "period_label": period, "flags": flags, "sector_moves": sector_moves,
               "policy_facts": policy_facts,
               "calendar": cal, "calendar_days": cal_days, "candidates": candidates,
