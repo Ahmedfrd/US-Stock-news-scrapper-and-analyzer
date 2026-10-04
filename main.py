@@ -1,52 +1,45 @@
 #!/usr/bin/env python3
 """
-main.py — build TWO reports and send them as two separate emails:
-  * Portfolio Digest — your holdings, full depth
-  * Market Digest    — general market, sector highlights, and stocks to watch
-                       (which get the SAME full analysis as your holdings)
+main.py — two emails on two cadences:
 
-    python main.py                 # full run (sends both)
-    python main.py --dry-run       # build & save & print both, send nothing
-    python main.py --weekly        # force the weekly sector deep-dive
-    python main.py --config x.yaml
+  * Market Digest US     DAILY (every scheduled run, Mon–Sat 07:00 HKT): what
+                         happened in the market since the previous email — policy
+                         & rates, macro prints, global, sectors, at most three
+                         stocks to watch, crypto, and a dated calendar.
+  * Portfolio Digest US  WEEKLY (on schedule.portfolio_day, default Sat HKT): the
+                         week's news on your holdings, how each travelled over
+                         the week, and a verdict that says what changed since
+                         last week.
+
+    python main.py                          # scheduled behaviour (market daily, portfolio weekly)
+    python main.py --report both --dry-run  # build both, print, send nothing, save no state
+    python main.py --report portfolio
+    python main.py --no-ai --dry-run        # data + rule-based fallback only (no API keys needed)
 """
 
 from __future__ import annotations
 
-import os, sys, argparse, datetime as dt
+import argparse
+import datetime as dt
+import os
+import sys
 from zoneinfo import ZoneInfo
+
 import yaml
-
-# Runner clock is UTC; the digest is read in Hong Kong each morning. Use HK time
-# for the displayed date and for the "which morning is this" weekday checks so a
-# run near the 23:00-UTC cron (which GitHub can delay across UTC midnight) is
-# attributed to the correct local day.
-LOCAL_TZ = ZoneInfo("Asia/Hong_Kong")
-
-
-def _now_local():
-    return dt.datetime.now(LOCAL_TZ)
 
 try:
     from dotenv import load_dotenv
     load_dotenv()
-except Exception:
+except Exception:  # noqa: BLE001
     pass
 
 import sources, fundamentals, etf as etf_mod, technicals as tech_mod
 import sentiment, social, analyzer, digest, delivery, portfolio, shariah
+import prices, state as state_mod, econ_calendar
 try:
     import discovery
 except ImportError:
     discovery = None
-try:
-    import pk
-except ImportError:
-    pk = None
-try:
-    import pk_social
-except ImportError:
-    pk_social = None
 try:
     import market_data
 except ImportError:
@@ -56,72 +49,84 @@ try:
 except ImportError:
     filings = None
 
-_WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-_DEFAULT_FLAGS = [("Brent","BZ=F"),("WTI","CL=F"),("Gold","GC=F"),("US Dollar (DXY)","DX-Y.NYB"),
-                  ("S&P 500","^GSPC"),("Nasdaq","^IXIC"),("10Y yield","^TNX"),
-                  ("Bitcoin","BTC-USD"),("Ethereum","ETH-USD")]
+LOCAL_TZ = ZoneInfo("Asia/Hong_Kong")
+UTC = dt.timezone.utc
+_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+_DEFAULT_FLAGS = [("S&P 500", "^GSPC"), ("Nasdaq", "^IXIC"), ("Dow Jones", "^DJI"), ("Russell 2000", "^RUT"),
+                  ("VIX", "^VIX"), ("10Y yield", "^TNX"), ("US Dollar (DXY)", "DX-Y.NYB"), ("Gold", "GC=F"),
+                  ("Brent", "BZ=F"), ("WTI", "CL=F"), ("Bitcoin", "BTC-USD"), ("Ethereum", "ETH-USD")]
+_FOREIGN_SFX = {"KS", "KQ", "T", "AS", "DE", "F", "PA", "L", "TO", "V", "HK", "SS", "SZ", "TW", "TWO", "SI",
+                "AX", "NZ", "SW", "MI", "MC", "ST", "OL", "CO", "HE", "VI", "BR", "LS", "SA", "MX", "NS", "BO",
+                "IR", "IS", "JK", "BK", "KL", "KA"}
+
+
+def _now_local():
+    return dt.datetime.now(LOCAL_TZ)
 
 
 def load_config(path):
-    with open(path,"r",encoding="utf-8") as f: return yaml.safe_load(f)
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
-def is_weekly(config, forced):
-    if forced or os.environ.get("RUN_MODE","").lower()=="weekly": return True
-    return _WEEKDAYS[dt.date.today().weekday()] == config.get("weekly_sector_day","Fri")
 
-def is_market_day(config, args):
-    """Market Digest cadence: 'daily' (the default) sends it every run; set
-    market_digest_day to a UTC weekday name (e.g. Thu) to make it weekly.
-    Manual runs (workflow_dispatch / --dry-run / --force-market) always
-    produce it so testing is predictable."""
-    day = str(config.get("market_digest_day", "daily") or "daily").strip()
-    if day.lower() == "daily": return True
-    if args.dry_run or args.force_market: return True
-    if os.environ.get("GITHUB_EVENT_NAME","") == "workflow_dispatch": return True
-    return _WEEKDAYS[dt.date.today().weekday()] == day
+def _scheduled() -> bool:
+    return os.environ.get("GITHUB_EVENT_NAME", "") == "schedule"
 
-def _lookback_hours(config):
-    """News window in hours. The workflow runs ~23:00 UTC and the digest is read
-    the next HK morning; when that morning is a Monday the market was closed over
-    the weekend, so widen the window to fold Saturday + Sunday news into the
-    Monday edition. Keyed on the HK weekday so a run delayed across UTC midnight
-    is still recognised as the Monday-morning edition."""
-    base = int(config.get("sources", {}).get("lookback_hours", 24))
-    if _now_local().weekday() == 0:  # Monday HK morning -> cover Sat+Sun
-        return max(base, 54)
-    return base
+
+def decide_reports(config, requested: str) -> list[str]:
+    """auto: scheduled runs send the market email every time and the portfolio
+    email on schedule.portfolio_day (HK local weekday); any manual run sends both."""
+    requested = (requested or "auto").lower()
+    if requested in ("market", "portfolio"):
+        return [requested]
+    if requested == "both":
+        return ["market", "portfolio"]
+    if not _scheduled():
+        return ["market", "portfolio"]
+    day = str((config.get("schedule") or {}).get("portfolio_day", "Sat"))[:3].title()
+    out = ["market"]
+    if _WEEKDAYS[_now_local().weekday()] == day:
+        out.append("portfolio")
+    return out
+
+
+def _fmt_span(start, end):
+    a, b = start.astimezone(LOCAL_TZ), end.astimezone(LOCAL_TZ)
+    return f"News from {a:%a %d %b %H:%M} to {b:%a %d %b %H:%M} HKT"
+
+
+def market_window(state_data, now=None):
+    """[start, end] for the daily email. Scheduled runs start exactly where the
+    previous scheduled email's window ended (no gap, no repeats); Monday's email
+    therefore covers the whole weekend. Without memory (or on manual runs) it
+    falls back to 24h (48h on a Monday)."""
+    now = now or dt.datetime.now(UTC)
+    default = dt.timedelta(hours=48 if _now_local().weekday() == 0 else 24)
+    start = now - default
+    if _scheduled():
+        last = state_mod.parse_iso((state_data.get("market") or {}).get("last_window_end"))
+        if last and dt.timedelta(hours=12) <= (now - last) <= dt.timedelta(hours=96):
+            start = last
+    return start, now
+
 
 def _market_flags(instruments):
-    if instruments is None: pairs=[{"name":n,"symbol":s} for n,s in _DEFAULT_FLAGS]
-    elif not instruments: return []
-    else: pairs=instruments
-    out=[]
-    try:
-        import yfinance as yf
-    except ImportError:
-        return out
-    for item in pairs:
-        name=item.get("name") if isinstance(item,dict) else item[0]
-        sym=item.get("symbol") if isinstance(item,dict) else item[1]
-        try:
-            h=yf.Ticker(sym).history(period="5d")["Close"].dropna()
-            if len(h)>=2:
-                last,prev=float(h.iloc[-1]),float(h.iloc[-2])
-                out.append({"name":name,"price":round(last,2),"pct":round((last-prev)/prev*100,2) if prev else None})
-        except Exception:
-            continue
+    pairs = ([{"name": n, "symbol": s} for n, s in _DEFAULT_FLAGS] if instruments is None else instruments)
+    moves = prices.batch_moves([p["symbol"] for p in pairs], period="1mo")
+    out = []
+    for p in pairs:
+        m = moves.get(p["symbol"])
+        if m:
+            out.append({"name": p["name"], "symbol": p["symbol"], "price": m["price"], "pct": m["pct_1d"]})
     return out
 
 
 def _news_for(tk, name, lookback, max_items, fetch_full=False, full_limit=3):
-    """ETF holdings and stocks-to-watch bypass sources.collect(), so they never
-    got the full-article-body treatment collect() applies to portfolio holdings —
-    they were stuck with a 1-2 sentence RSS/Finnhub blurb, which is why the AI
-    could only paraphrase headlines instead of explaining the actual news. Fetch
-    the real article body for the top few items here too."""
+    """Ticker news for names outside collect(): Finnhub first, Google News fallback,
+    with the real article body for the top few items."""
     arts = sources.finnhub_news(tk, max_items, lookback)
     if not arts:
-        arts = sources.google_news(f'{name} stock OR "{tk}"', tk, "stock", max_items, lookback)
+        arts = sources.google_news(f'"{name}" stock OR "{tk}" shares', tk, "stock", max_items, lookback)
     if fetch_full:
         n = 0
         for a in arts:
@@ -138,372 +143,335 @@ def _news_for(tk, name, lookback, max_items, fetch_full=False, full_limit=3):
     return arts
 
 
-def _gather_stock(tk, name, lookback, max_items, benchmark, peers=None, market="US",
-                  fetch_full=False, holdings_n=8):
-    """Fetch fundamentals/technicals/earnings/filing/etf + news for one ticker."""
-    if market == "PK":
-        return {"news": sources.google_news(f'"{tk}" PSX OR "{name}" Pakistan stock',
-                                            tk, "stock", max_items, lookback),
-                "fund": pk.fetch_fundamentals(tk, name),
-                "tech": pk.technicals(tk),
-                "earn": None, "fil": None, "etf": None, "holding_news": {}}
-    # Fundamentals first: a market-scan candidate arrives as a bare ticker, and a
-    # Google News fallback query on a raw symbol ("PLTR stock") is far weaker than
-    # one on the real company name — so resolve the name before fetching news.
-    fund = fundamentals.fetch(tk, name)
-    data = {"news": _news_for(tk, (fund.name or name or tk), lookback, max_items,
-                              fetch_full=fetch_full),
-            "fund": fund,
-            "tech": tech_mod.compute(tk),
-            "earn": market_data.earnings_window(tk) if (market_data and market_data.enabled()) else None,
-            "fil": filings.latest_filing(tk) if filings else None,
-            "etf": None, "holding_news": {}}
-    if data["fund"].is_etf:
-        prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=peers)
-        data["etf"] = prof
-        for h in prof.holdings[:holdings_n]:
-            arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4, fetch_full=fetch_full, full_limit=1)
-            if arts: data["holding_news"][h.symbol] = arts
-    return data
-
-
 def _crypto_snapshot(symbols):
-    """[{symbol, price, pct(1d), pct7d}] for major coins via yfinance (SYM-USD)."""
+    moves = prices.batch_moves([f"{s}-USD" for s in symbols], period="1mo")
     out = []
-    try:
-        import yfinance as yf
-    except ImportError:
-        return out
-    for sym in symbols:
-        try:
-            h = yf.Ticker(f"{sym}-USD").history(period="8d")["Close"].dropna()
-            if len(h) >= 2:
-                last, prev = float(h.iloc[-1]), float(h.iloc[-2])
-                row = {"symbol": sym, "price": round(last, 2),
-                       "pct": round((last - prev) / prev * 100, 2) if prev else None,
-                       "pct7d": None}
-                if len(h) >= 8:
-                    w = float(h.iloc[0])
-                    row["pct7d"] = round((last - w) / w * 100, 2) if w else None
-                out.append(row)
-        except Exception:
-            continue
+    for s in symbols:
+        m = moves.get(f"{s}-USD")
+        if m:
+            h = prices.history(f"{s}-USD", "1mo")
+            pct7 = None
+            try:
+                c = h["Close"].dropna()
+                pct7 = round((float(c.iloc[-1]) - float(c.iloc[-8])) / float(c.iloc[-8]) * 100, 2) if len(c) >= 8 else None
+            except Exception:  # noqa: BLE001
+                pass
+            out.append({"symbol": s, "price": m["price"], "pct": m["pct_1d"], "pct7d": pct7})
     return out
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default="config.yaml")
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--weekly", action="store_true")
-    ap.add_argument("--force-market", action="store_true",
-                    help="build the Market Digest even off its weekly day")
-    args = ap.parse_args()
-    config = load_config(args.config)
-    print("[env] " + " | ".join(
-        f"{k}={'set' if os.environ.get(k) else 'MISSING'}"
-        for k in ["GEMINI_API_KEY", "FINNHUB_API_KEY", "ADANOS_API_KEY",
-                  "SEC_USER_AGENT", "EMAIL_PASSWORD"]))
-    stocks = config.get("watchlist", {}).get("stocks", [])
-    weekly = is_weekly(config, args.weekly)
-    make_market = is_market_day(config, args)
-    if not make_market:
-        print(f"[market] Market Digest is set to weekly (market_digest_day: "
-              f"{config.get('market_digest_day')} UTC) — today is Portfolio Digest only.")
-    benchmark = config.get("etf_benchmark", "SPY")
-    lookback = _lookback_hours(config)
-    config.setdefault("sources", {})["lookback_hours"] = lookback  # so sources.collect() agrees
-    max_items = int(config.get("sources", {}).get("max_items_per_query", 8))
-    fetch_full = bool(config.get("sources", {}).get("fetch_full_articles", False))
-    holdings_n = int(config.get("etf_holdings_news", 8))
+def _is_foreign(tk):
+    tk = tk.strip().upper()
+    root, _, sfx = tk.rpartition(".")
+    return bool(root and sfx in _FOREIGN_SFX) or tk.split(".")[0].isdigit()
 
-    print("[1/6] Collecting news…")
-    items = sources.collect(config)
-    print(f"      {len(items)} headlines.")
 
-    # ---- Whole-market scan --------------------------------------------------
-    # collect() above only fetches news for names you already care about, so any
-    # "stock to watch" derived from it is portfolio-adjacent by construction.
-    # This scans the market at large and turns the day's stories into priced
-    # candidates, so a company you've never held can surface purely on its news.
-    scan_items, candidates = [], []
+# =========================================================================== #
+#  DAILY MARKET DIGEST
+# =========================================================================== #
+def run_market(config, state_data, args):
+    start, end = market_window(state_data)
+    sources.set_window(start, end)
+    lookback = max(1, int((end - start).total_seconds() // 3600) + 1)
+    config.setdefault("sources", {})["lookback_hours"] = lookback
+    period = _fmt_span(start, end)
+    print(f"\n===== MARKET DIGEST — {period} ({lookback}h) =====")
+    src = config.get("sources", {}) or {}
     mscfg = config.get("market_scan", {}) or {}
-    if make_market and mscfg.get("enabled", True):
-        print("[scan] Scanning the WHOLE market for names in today's news…")
+    fetch_full = bool(src.get("fetch_full_articles", False))
+    stocks = (config.get("watchlist") or {}).get("stocks", []) or []
+    holdings = [s.get("ticker", "").strip().upper() for s in stocks if s.get("ticker")]
+
+    print("[1/7] Whole-market scan…")
+    scan_items, candidates = [], []
+    try:
+        scan_items = sources.market_scan(config)
+    except Exception as ex:  # noqa: BLE001
+        print(f"      market scan failed ({ex})")
+    if scan_items and discovery:
         try:
-            scan_items = sources.market_scan(config)
-            print(f"      {len(scan_items)} market-wide headlines.")
-        except Exception as ex:
-            print(f"      market scan failed ({ex})")
-        if scan_items and discovery:
-            try:
-                candidates = discovery.scan(
-                    scan_items,
-                    exclude=[s.get("ticker", "") for s in stocks],
-                    limit=int(mscfg.get("max_candidates", 25)),
-                    min_move=float(mscfg.get("min_move_pct", 0) or 0))
-                print(f"      {len(candidates)} priced candidates outside the portfolio: "
-                      + ", ".join(c["ticker"] for c in candidates[:12]))
-            except Exception as ex:
-                print(f"      candidate discovery failed ({ex})")
-            # Read the top candidates' lead stories in FULL — a candidate the AI
-            # can only see the headline of gets rejected for lack of substance.
-            if fetch_full:
-                for c in candidates[:int(mscfg.get("full_articles_for_top", 8))]:
-                    for a in (c.get("articles") or [])[:1]:
-                        if not a.url or "news.google.com" in a.url:
-                            continue
+            candidates = [c for c in discovery.scan(scan_items, exclude=holdings,
+                                                    limit=int(mscfg.get("max_candidates", 25)),
+                                                    min_move=float(mscfg.get("min_move_pct", 0) or 0))
+                          if not _is_foreign(c["ticker"])]
+        except Exception as ex:  # noqa: BLE001
+            print(f"      candidate discovery failed ({ex})")
+        if fetch_full:
+            for c in candidates[:int(mscfg.get("full_articles_for_top", 8))]:
+                for a in (c.get("articles") or [])[:1]:
+                    if a.url and "news.google.com" not in a.url and len(a.summary or "") < 1500:
                         body, final_url = sources.fetch_article_text(a.url)
                         if final_url and "finnhub.io" not in final_url:
                             a.url = final_url
                         if body:
                             a.summary = (a.summary + " " + body).strip()[:3500]
-        items = items + scan_items
-    elif not make_market:
-        print("[scan] Portfolio-only day — skipping the whole-market scan.")
+    print(f"      {len(scan_items)} headlines, {len(candidates)} priced candidates")
 
-    market = (config.get("market") or "US").upper()
-    print(f"[2/6] Portfolio data ({market}: fundamentals/technicals"
-          + ("/etf/earnings/filings" if market == "US" else " via PSX") + ")…")
-    technicals, earnings, fils, etf_profiles, etf_hnews = {}, {}, {}, {}, {}
-    if market == "PK":
-        # PSX: free official data portal. No Finnhub/EDGAR/ETF-internals coverage.
-        funds = {}
-        for s in stocks:
-            tk = s.get("ticker", "").strip()
-            if not tk: continue
-            funds[tk] = pk.fetch_fundamentals(tk, s.get("name", ""))
-            technicals[tk] = pk.technicals(tk)
-    else:
-        funds = fundamentals.fetch_many(stocks)
-        for s in stocks:
-            tk = s.get("ticker","").strip()
-            if not tk: continue
-            technicals[tk] = tech_mod.compute(tk)
-            if market_data and market_data.enabled():
-                earnings[tk] = market_data.earnings_window(tk)
-            if filings:
-                fl = filings.latest_filing(tk)
-                if fl: fils[tk] = fl
-            if funds.get(tk) and funds[tk].is_etf:
-                prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=s.get("peers"))
-                etf_profiles[tk] = prof
-                # Every major component company gets its OWN news pull — that
-                # per-company breakdown is the point of holding the fund here.
-                print(f"      {tk}: fetching news for {min(holdings_n, len(prof.holdings))} "
-                      f"component compan(ies)…")
-                for h in prof.holdings[:holdings_n]:
-                    arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4, fetch_full=fetch_full, full_limit=1)
-                    if arts: etf_hnews.setdefault(tk, {})[h.symbol] = arts
-
-    print(f"[3/6] Sentiment + crowd ({'Reddit' if market=='PK' else 'Adanos'}) + market flags…")
-    sent = sentiment.aggregate(items)
-    port_tickers = [s.get("ticker","").strip() for s in stocks if s.get("ticker")]
-    name_map = {s.get("ticker","").strip().upper(): s.get("name","") for s in stocks if s.get("ticker")}
-    crowd = {}
-    if config.get("sources", {}).get("social", True):
-        try:
-            if market == "PK" and pk_social:
-                crowd = pk_social.crowd(port_tickers, names=name_map,
-                                        subs=config.get("sources", {}).get("reddit_subs"))
-            elif social:
-                crowd = social.crowd(port_tickers, config.get("sources", {}).get("adanos_platforms"))
-        except Exception as ex: print(f"      crowd unavailable ({ex})")
-    flags = _market_flags(config.get("market_flags"))
-
-    sector_news = {}
-    if weekly:
-        print("[weekly] Sector developments…")
-        secs = sorted({(funds[s['ticker']].sector or '').strip() for s in stocks
-                       if s.get('ticker') in funds and funds[s['ticker']].sector}
-                      | set(config.get("watchlist", {}).get("topics", [])))
-        sector_news = sources.sector_news([x for x in secs if x])
-
-    # ---- Crypto (major coins only) — gathered before analysis ----
-    crypto_watch = config.get("crypto_watch", ["BTC", "ETH", "SOL", "XRP", "BNB"])
+    print("[2/7] Policy, macro, global and sector news…")
+    themes = config.get("market_themes") or []
+    items = sources.collect_market(config, scan_items)
+    crypto_watch = config.get("crypto_watch") or []
     crypto = {}
     if crypto_watch:
-        print(f"[crypto] Snapshot + news for {len(crypto_watch)} major coin(s)…")
-        cnews = sources.google_news("cryptocurrency market bitcoin ethereum",
-                                    "Crypto", "topic", max_items, lookback) \
-            if config.get("sources", {}).get("google_news", True) else []
-        csent = {}
-        if config.get("sources", {}).get("social", True):
-            try: csent = social.crypto_sentiment(crypto_watch)
-            except Exception: csent = {}
-        crypto = {"snapshot": _crypto_snapshot(crypto_watch), "news": cnews, "sentiment": csent}
-        # technical analysis per coin (shown collapsed in the report)
-        ctech = {}
-        for sym in crypto_watch:
-            try: ctech[sym] = tech_mod.compute(f"{sym}-USD")
-            except Exception: pass
-        crypto["technicals"] = ctech
-        items = items + cnews
+        cnews = sources.google_news("bitcoin OR ethereum crypto market", "Crypto", "topic", 6, lookback)
+        crypto = {"snapshot": _crypto_snapshot(crypto_watch), "news": cnews}
+        items += cnews
+    print(f"      {len(items)} themed articles")
 
-    extras = {"sentiment": sentiment.aggregate(items), "crowd": crowd, "earnings": earnings,
-              "filings": fils, "weekly": weekly, "sector_news": sector_news, "etf": etf_profiles,
-              "etf_holding_news": etf_hnews, "technicals": technicals, "flags": flags,
-              "crypto": crypto, "region": market,
-              "market_scan": scan_items, "candidates": candidates,
-              "look_through": portfolio.look_through(stocks, funds, etf_profiles)}
+    print("[3/7] Market levels, sector ETFs, calendar…")
+    flags = _market_flags(config.get("market_flags"))
+    sec_cfg = config.get("sector_etfs") or []
+    smoves = prices.batch_moves([s["symbol"] for s in sec_cfg], period="1mo")
+    sector_moves = [{"label": s["label"], "symbol": s["symbol"], **smoves[s["symbol"]]}
+                    for s in sec_cfg if s["symbol"] in smoves]
+    ccfg = config.get("calendar") or {}
+    cal_days = int(ccfg.get("horizon_days", 14))
+    try:
+        cal = econ_calendar.build(cal_days, (start, end), scope="global")
+    except Exception as ex:  # noqa: BLE001
+        print(f"      calendar failed ({ex})")
+        cal = {}
 
-    print("[4/6] Analyzing portfolio…")
-    port_analysis, status = analyzer.analyze(items, funds, extras, config)
+    fl = {x["name"]: x for x in flags}
+    policy_facts = []
+    if cal.get("fed_rate"):
+        policy_facts.append(("Fed funds (upper bound)", cal["fed_rate"]))
+    if cal.get("fomc_next"):
+        dd = (cal["fomc_next"].date() - dt.date.today()).days
+        policy_facts.append(("Next FOMC decision", f"{econ_calendar.fmt_when(cal['fomc_next'])} ({dd}d)"))
+    ty = fl.get("10Y yield") or {}
+    if ty.get("price") is not None:
+        policy_facts.append(("10Y Treasury yield", f"{ty['price']:.2f}%"
+                             + (f" ({ty['pct']:+.2f}% on the day)" if ty.get("pct") is not None else "")))
+    extras = {"region": "US", "period_label": period, "flags": flags, "sector_moves": sector_moves,
+              "policy_facts": policy_facts,
+              "calendar": cal, "calendar_days": cal_days, "candidates": candidates,
+              "market_scan": scan_items[:40], "crypto": crypto,
+              "theme_labels": [t["label"] for t in themes],
+              "sector_labels": [t["label"] for t in themes if t.get("kind") == "sector"],
+              "theme_etf": {t["label"]: t.get("etf") for t in themes if t.get("etf")},
+              "calendar_note": ("Dates from the Federal Reserve, TreasuryDirect, ForexFactory and Nasdaq "
+                                "(Nasdaq's dates are cross-checked against the Fed and Treasury every run). "
+                                "Where two figures are shown they are month-on-month / year-on-year."),
+              "footer_sources": ("Yahoo Finance, Finnhub, Google News, CNBC / MarketWatch / Yahoo / Investing.com RSS, "
+                                 "Federal Reserve, ECB, BLS, BEA, TreasuryDirect, Nasdaq & ForexFactory calendars")}
+
+    print("[4/7] AI market analysis…")
+    an, status = analyzer.analyze_market(items + scan_items, extras, config)
     print(f"      engine: {status['engine']} (ok={status['ok']})")
 
-    # ---- Stage 2: fully analyse AI-derived stocks to watch ----
-    # (Market-Digest-only content — skipped on non-market days to save quota.)
-    shariah_only = config.get("shariah_only", False)
-    watch = [w for w in (port_analysis.get("stocks_to_watch") or [])
-             if w.get("ticker") and w["ticker"].upper() not in {t.upper() for t in port_tickers}]
-    # Defense in depth alongside the prompt: the US Market Digest must not carry
-    # foreign-exchange listings (KRW/JPY prices, no Adanos/Finnhub coverage).
-    # Class shares like BRK.B stay; Yahoo exchange suffixes and numeric roots go.
-    _FOREIGN_SFX = {"KS","KQ","T","AS","DE","F","PA","L","TO","V","HK","SS","SZ","TW","TWO",
-                    "SI","AX","NZ","SW","MI","MC","ST","OL","CO","HE","VI","BR","LS","SA",
-                    "MX","NS","BO","IR","IS","JK","BK","KL"}
-    def _is_foreign(tk):
-        tk = tk.strip().upper()
-        root, _, sfx = tk.rpartition(".")
-        return (root and sfx in _FOREIGN_SFX) or tk.split(".")[0].isdigit()
-    dropped = [w["ticker"] for w in watch if _is_foreign(w["ticker"])]
-    if dropped:
-        print(f"      dropped non-US listing(s) from stocks-to-watch: {', '.join(dropped)}")
-    watch = [w for w in watch if not _is_foreign(w["ticker"])]
-
-    # Top up from the whole-market scan. If the model leaned on familiar
-    # portfolio-adjacent names (or returned too few), the priced candidates from
-    # the market-wide scan fill the rest — that keeps the section genuinely
-    # market-wide rather than a mirror of what's already in the report.
-    watch_max = int(mscfg.get("watch_max", 6))
-    # Pool size, not final count: the Shariah screen below rejects a good share
-    # of market-wide names, so we carry spares. Each spare that gets screened
-    # costs a full data fetch, so keep it modest (Finnhub free tier: 60/min).
-    watch_pool = int(mscfg.get("watch_pool", watch_max * 2))
-    _have = {w["ticker"].upper() for w in watch}
-    for c in candidates:
-        if len(watch) >= watch_pool:
+    print("[5/7] Stocks to watch…")
+    watch_max = int(mscfg.get("watch_max", 3))
+    funds, techs, earn, fils = {}, {}, {}, {}
+    sh_res, kept = {}, []
+    for p in an.get("stocks_to_watch") or []:
+        tk = p["ticker"]
+        if _is_foreign(tk):
+            continue
+        f = fundamentals.fetch(tk, tk)
+        if f.price is None:
+            print(f"      dropped {tk} — no price data")
+            continue
+        sc = shariah.screen(f)
+        if config.get("shariah_only") and sc["status"] == "fail":
+            print(f"      dropped {tk} — {sc['reasons'][0]}")
+            continue
+        sh_res[tk] = sc
+        funds[tk] = f
+        techs[tk] = tech_mod.compute(tk)
+        if market_data and market_data.enabled():
+            earn[tk] = market_data.earnings_window(tk)
+        if filings:
+            fl = filings.latest_filing(tk, within_days=3)
+            if fl:
+                fils[tk] = fl
+        items += _news_for(tk, f.name or tk, lookback, 6, fetch_full=fetch_full, full_limit=2)
+        kept.append(p)
+        if len(kept) >= watch_max:
             break
-        if c["ticker"].upper() in _have or c["ticker"].upper() in {t.upper() for t in port_tickers}:
+    an["stocks_to_watch"] = kept
+    extras.update({"technicals": techs, "earnings": earn, "filings": fils, "shariah": sh_res})
+    print(f"      {len(kept)} pick(s): {', '.join(p['ticker'] for p in kept) or 'none'}")
+    if kept:
+        try:
+            analyzer.run_pick_debates(kept, funds, extras, items, config)
+        except Exception as ex:  # noqa: BLE001
+            print(f"[debate] skipped ({ex})")
+
+    print("[6/7] Track record…")
+    recent = state_mod.recent_picks(state_data, days=21)
+    if recent:
+        now_px = prices.batch_moves(sorted({r["ticker"] for r in recent}), period="5d")
+        tr = []
+        for r in recent[:8]:
+            m = now_px.get(r["ticker"])
+            if m and r.get("price"):
+                tr.append({**r, "now": m["price"], "pct": round((m["price"] - r["price"]) / r["price"] * 100, 2)})
+        extras["track_record"] = tr
+
+    print("[7/7] Rendering…")
+    subject, html_body, text_body = digest.build_market(an, items + scan_items, funds, extras, econ_calendar.fmt_when)
+    if not args.dry_run:
+        for p in kept:
+            v = ((p.get("debate") or {}).get("verdict") or {})
+            state_mod.record_pick(state_data, p["ticker"], v.get("call") or "hold",
+                                  funds[p["ticker"]].price, p.get("catalyst", ""))
+        if _scheduled():
+            state_data.setdefault("market", {})["last_window_end"] = end.replace(microsecond=0).isoformat()
+    return "market", subject, html_body, text_body
+
+
+# =========================================================================== #
+#  WEEKLY PORTFOLIO DIGEST
+# =========================================================================== #
+def run_portfolio(config, state_data, args):
+    days = int((config.get("schedule") or {}).get("portfolio_lookback_days", 7))
+    end = dt.datetime.now(UTC)
+    start = end - dt.timedelta(days=days)
+    sources.set_window(start, end)
+    lookback = days * 24
+    config.setdefault("sources", {})["lookback_hours"] = lookback
+    period = f"News from {start.astimezone(LOCAL_TZ):%a %d %b} to {end.astimezone(LOCAL_TZ):%a %d %b %Y}"
+    print(f"\n===== PORTFOLIO DIGEST — {period} =====")
+    src = config.get("sources", {}) or {}
+    stocks = (config.get("watchlist") or {}).get("stocks", []) or []
+    fetch_full = bool(src.get("fetch_full_articles", False))
+    holdings_n = int(config.get("etf_holdings_news", 8))
+    benchmark = config.get("etf_benchmark", "SPY")
+
+    print("[1/6] This week's news on your holdings…")
+    items = sources.collect(config)
+    print(f"      {len(items)} articles")
+
+    print("[2/6] Fundamentals, technicals, earnings, filings, ETF internals…")
+    funds = fundamentals.fetch_many(stocks)
+    techs, earn, fils, etf_profiles, etf_hnews = {}, {}, {}, {}, {}
+    bench_hist = prices.history(benchmark, "1y")
+    progs, prog_txt = {}, {}
+    for s in stocks:
+        tk = s.get("ticker", "").strip()
+        if not tk:
             continue
-        if _is_foreign(c["ticker"]):
-            continue
-        _have.add(c["ticker"].upper())
-        pct = c.get("pct_1d")
-        watch.append({"ticker": c["ticker"], "source": "market-scan",
-                      "call": "bullish" if (pct or 0) > 1.5 else "bearish" if (pct or 0) < -1.5 else "neutral",
-                      "reason": (f"In today's market-wide news ({c.get('mentions',1)} stories"
-                                 + (f", {pct:+.2f}%" if pct is not None else "") + f"): {c.get('headline','')}")})
-    if not make_market:
-        watch = []
-    watch = watch[:watch_pool]
-    watch_analysis = {"stocks": []}
-    watch_reasons, shariah_res = {}, {}
-    if watch:
-        print(f"[5/6] Deep-analysing stocks to watch"
-              + (" (Shariah-screened)" if shariah_only else "") + "…")
-        witems, kept = [], []
-        for w in watch:
-            tk = w["ticker"].strip()
-            d = _gather_stock(tk, tk, lookback, max_items, benchmark, market=market,
-                              fetch_full=fetch_full, holdings_n=holdings_n)
-            sc = shariah.screen(d["fund"])
-            if shariah_only and sc["status"] == "fail":
-                print(f"      dropped {tk} — {sc['reasons'][0]}")
-                continue
-            kept.append(w); shariah_res[tk] = sc
-            witems += d["news"]
-            funds[tk] = d["fund"]; technicals[tk] = d["tech"]
-            if d["earn"]: earnings[tk] = d["earn"]
-            if d["fil"]: fils[tk] = d["fil"]
-            if d["etf"]: etf_profiles[tk] = d["etf"]; etf_hnews[tk] = d["holding_news"]
-            if len(kept) >= watch_max:
-                break
-        watch = kept
-        watch_reasons = {w["ticker"]: (("🔎 whole-market scan — " if w.get("source") == "market-scan" else "")
-                                       + w.get("reason", "")) for w in watch}
-        wcrowd = {}
-        if watch and config.get("sources", {}).get("social", True):
+        techs[tk] = tech_mod.compute(tk)
+        progs[tk] = prices.progression(tk, bench_hist=bench_hist)
+        prog_txt[tk] = prices.describe(progs[tk])
+        if market_data and market_data.enabled():
+            earn[tk] = market_data.earnings_window(tk, back_days=8, fwd_days=45)
+        if filings:
+            fl = filings.latest_filing(tk, within_days=8)
+            if fl:
+                fils[tk] = fl
+        if funds.get(tk) and funds[tk].is_etf:
+            prof = etf_mod.enrich(tk, benchmark=benchmark, peer_tickers=s.get("peers"))
+            etf_profiles[tk] = prof
+            for h in prof.holdings[:holdings_n]:
+                arts = _news_for(h.symbol, h.name or h.symbol, lookback, 4, fetch_full=fetch_full, full_limit=1)
+                if arts:
+                    etf_hnews.setdefault(tk, {})[h.symbol] = arts
+            print(f"      {tk}: {len(etf_hnews.get(tk, {}))} of {min(holdings_n, len(prof.holdings))} components had news")
+
+    print("[3/6] Crowd sentiment…")
+    crowd = {}
+    if src.get("social", True):
+        try:
+            crowd = social.crowd([s["ticker"] for s in stocks if s.get("ticker")], src.get("adanos_platforms"))
+        except Exception as ex:  # noqa: BLE001
+            print(f"      crowd unavailable ({ex})")
+
+    events = []
+    today = dt.date.today()
+    for s in stocks:
+        tk = s.get("ticker")
+        u = ((earn.get(tk) or {}).get("upcoming") or {})
+        d = None
+        if u.get("date"):
             try:
-                if market == "PK" and pk_social:
-                    wcrowd = pk_social.crowd([w["ticker"] for w in watch],
-                                             names={w["ticker"].upper(): w["ticker"] for w in watch},
-                                             subs=config.get("sources", {}).get("reddit_subs"))
-                elif social:
-                    wcrowd = social.crowd([w["ticker"] for w in watch], config.get("sources", {}).get("adanos_platforms"))
-            except Exception: pass
-        crowd.update(wcrowd)
-        items = items + witems
-        extras.update({"sentiment": sentiment.aggregate(items), "crowd": crowd,
-                       "earnings": earnings, "filings": fils, "etf": etf_profiles,
-                       "etf_holding_news": etf_hnews, "technicals": technicals,
-                       "shariah": shariah_res})
-        if watch:
-            wconfig = {"watchlist": {"stocks": [{"ticker": w["ticker"], "name": w["ticker"]} for w in watch],
-                                     "topics": []}, "analysis": config.get("analysis", {})}
-            watch_analysis, _ = analyzer.analyze(items, funds, extras, wconfig)
-    else:
-        print("[5/6] No external stocks to watch this run.")
+                d = dt.date.fromisoformat(u["date"])
+            except ValueError:
+                d = None
+        elif funds.get(tk) and funds[tk].next_earnings:
+            try:
+                d = dt.date.fromisoformat(funds[tk].next_earnings)
+            except ValueError:
+                d = None
+        if d and 0 <= (d - today).days <= 45:
+            hour = {"bmo": " (before the open)", "amc": " (after the close)"}.get((u.get("hour") or "").lower(), "")
+            est = f" — EPS est. {u['eps_estimate']}" if u.get("eps_estimate") is not None else ""
+            events.append({"date": d, "ticker": tk, "title": f"earnings{hour}{est}"})
+    events.sort(key=lambda e: e["date"])
 
-    # ETFs rarely get fund-level headlines (Finnhub company-news doesn't cover
-    # them), so their news tone was always n/a — fall back to the tone of their
-    # underlying holdings' headlines, labelled as such in the report.
-    senti = extras.get("sentiment") or {}
-    for tk, hn in (extras.get("etf_holding_news") or {}).items():
-        if senti.get(tk, {}).get("n"):
-            continue  # the fund had direct news after all
-        scores = [sentiment.score_text(f"{a.title}. {a.summary}")
-                  for arts in hn.values() for a in arts]
-        scores = [s for s in scores if s is not None]
-        if scores:
-            avg = round(sum(scores) / len(scores), 3)
-            senti[tk] = {"score": avg, "label": sentiment.label(avg),
-                         "n": len(scores), "basis": "holdings"}
+    extras = {"region": "US", "period_label": period, "technicals": techs, "earnings": earn, "filings": fils,
+              "etf": etf_profiles, "etf_holding_news": etf_hnews, "crowd": crowd, "progression": progs,
+              "progression_text": prog_txt, "holdings_order": stocks, "holding_events": events,
+              "sentiment": sentiment.aggregate(items),
+              "look_through": portfolio.look_through(stocks, funds, etf_profiles),
+              "footer_sources": "Yahoo Finance, Finnhub, Google News, SEC EDGAR, Adanos (crowd)"}
 
-    print(f"[6/6] Building {'two reports' if make_market else 'the portfolio report'}…")
-    # Optional three-layer bull/bear/judge debate on selected names.
+    print("[4/6] AI portfolio review…")
+    an, status = analyzer.analyze_portfolio(items, funds, extras, config)
+    print(f"      engine: {status['engine']} (ok={status['ok']})")
+
+    print("[5/6] Weekly verdicts (bull · bear · judge)…")
     try:
-        analyzer.run_debates(port_analysis, watch_analysis, funds, extras, items, config)
-    except Exception as e:
-        print(f"[debate] skipped ({e})")
-    # Diagnose crowd availability so the report can explain a blank panel.
-    if market == "PK":
-        if any(c.get("has_data") for c in crowd.values()):
-            extras["crowd_status"] = "ok"
-        elif not config.get("sources", {}).get("social", True):
-            extras["crowd_status"] = "ok"
-        else:
-            extras["crowd_status"] = "pk_thin"
-    elif not os.environ.get("ADANOS_API_KEY"):
-        extras["crowd_status"] = "no_key"
-    elif any(c.get("has_data") for c in crowd.values()):
-        extras["crowd_status"] = "ok"
-    else:
-        extras["crowd_status"] = "empty"
+        analyzer.run_holding_debates(an, funds, extras, items, config, state_data)
+    except Exception as ex:  # noqa: BLE001
+        print(f"[debate] skipped ({ex})")
+
+    print("[6/6] Rendering…")
+    subject, html_body, text_body = digest.build_portfolio(an, items, funds, extras)
+    if not args.dry_run:
+        for s in an.get("stocks", []):
+            v = ((s.get("debate") or {}).get("verdict") or {})
+            f = funds.get(s.get("ticker"))
+            state_mod.record_verdict(state_data, s.get("ticker", ""), v, f.price if f else None)
+    return "portfolio", subject, html_body, text_body
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default="config.yaml")
+    ap.add_argument("--report", default=os.environ.get("REPORT", "auto"),
+                    choices=["auto", "market", "portfolio", "both"])
+    ap.add_argument("--dry-run", action="store_true",
+                    default=os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes"))
+    ap.add_argument("--no-ai", action="store_true", help="skip every AI call (rule-based fallback)")
+    args = ap.parse_args()
+    config = load_config(args.config)
+    sources.configure(config)
+    if args.no_ai:
+        config.setdefault("analysis", {}).update(enabled=False, debate=False)
+    print("[env] " + " | ".join(f"{k}={'set' if os.environ.get(k) else 'MISSING'}"
+                                for k in ["GEMINI_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY", "FINNHUB_API_KEY",
+                                          "ADANOS_API_KEY", "SEC_USER_AGENT", "EMAIL_PASSWORD"]))
+    reports = decide_reports(config, args.report)
+    print(f"[plan] reports this run: {', '.join(reports)}"
+          + (" (dry run — nothing is sent, no state saved)" if args.dry_run else ""))
+    state_data = state_mod.load()
     out_dir = config.get("output_dir", "./digests")
     os.makedirs(out_dir, exist_ok=True)
-    tag = "weekly" if weekly else "daily"
-    reports = [
-        ("portfolio", *digest.build_portfolio(port_analysis, items, funds, extras)),
-    ]
-    if make_market:
-        reports.append(("market", *digest.build_market(port_analysis, watch_analysis,
-                                                       items, funds, extras, watch_reasons)))
-    for kind, subject, html_body, text_body in reports:
-        path = os.path.join(out_dir, f"digest-{_now_local().date():%Y-%m-%d}-{kind}.html")
-        with open(path, "w", encoding="utf-8") as f: f.write(html_body)
+    built = []
+    for kind in reports:
+        try:
+            built.append((run_market if kind == "market" else run_portfolio)(config, state_data, args))
+        except Exception as ex:  # noqa: BLE001 — one email failing must not stop the other
+            import traceback
+            traceback.print_exc()
+            print(f"[{kind}] FAILED: {ex}")
+    for kind, subject, html_body, text_body in built:
+        path = os.path.join(out_dir, f"digest-{_now_local():%Y-%m-%d}-{kind}.html")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html_body)
         print(f"      saved {path}")
-
-    if args.dry_run:
-        for kind, subject, html_body, text_body in reports:
-            print("\n" + "="*64 + f"\n{kind.upper()}\n" + "="*64 + "\n" + text_body[:1500])
-        print("\n[dry-run] Not sending.")
-        return 0
-
-    for kind, subject, html_body, text_body in reports:
-        print(f"      delivering {kind}…")
-        delivery.deliver(config, subject, html_body, text_body)
-    return 0
+        if args.dry_run:
+            print("\n" + "=" * 64 + f"\n{subject}\n" + "=" * 64 + "\n" + text_body[:2500])
+        else:
+            print(f"      delivering {kind}…")
+            delivery.deliver(config, subject, html_body, text_body)
+    if not args.dry_run:
+        state_mod.save(state_data)
+    else:
+        print("\n[dry-run] Not sending; state not saved.")
+    return 0 if len(built) == len(reports) else 1
 
 
 if __name__ == "__main__":

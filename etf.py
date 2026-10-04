@@ -28,6 +28,8 @@ class Holding:
     weight: float | None            # fraction (0..1)
     ret_1d: float | None = None     # %
     contribution: float | None = None  # weight * ret_1d, in % points
+    ret_1w: float | None = None     # % over the last 5 sessions
+    contribution_1w: float | None = None  # weight * ret_1w, in % points
 
 
 @dataclass
@@ -60,6 +62,7 @@ class EtfProfile:
     tracks_benchmark: bool = False                     # ~identical to benchmark (e.g. S&P ETF vs SPY)
     peers: list = field(default_factory=list)          # [Peer]
     explained_move: float | None = None                # sum of contributions, %
+    explained_move_1w: float | None = None             # same, over the week
     error: str | None = None
 
 
@@ -82,6 +85,10 @@ def _ret(closes, periods):
     return None
 
 
+def _round(x, nd=2):
+    return round(x, nd) if x is not None else None
+
+
 def _returns_block(closes) -> dict:
     out = {"1d": _ret(closes, 1), "1w": _ret(closes, 5), "1m": _ret(closes, 21),
            "3m": _ret(closes, 63), "6m": _ret(closes, 126), "1y": _ret(closes, 252)}
@@ -94,7 +101,7 @@ def _returns_block(closes) -> dict:
             out["ytd"] = (a - b) / b * 100 if b else None
     except Exception:
         out["ytd"] = None
-    return out
+    return {k: _round(v) for k, v in out.items()}
 
 
 def _vol_and_drawdown(closes):
@@ -190,17 +197,22 @@ def enrich(ticker: str, benchmark: str = "SPY", peer_tickers: list | None = None
             p.top10_weight = round(sum((h.weight or 0) for h in p.holdings) * 100, 1)
 
         # Per-holding 1d move + contribution to the ETF's move
-        explained = 0.0
+        explained = explained_w = 0.0
         for h in p.holdings[:8]:
             try:
-                hh = yf.Ticker(h.symbol).history(period="5d")["Close"].dropna()
-                h.ret_1d = _ret(hh, 1)
+                hh = yf.Ticker(h.symbol).history(period="1mo")["Close"].dropna()
+                h.ret_1d = _round(_ret(hh, 1))
+                h.ret_1w = _round(_ret(hh, 5))
                 if h.ret_1d is not None and h.weight is not None:
                     h.contribution = round(h.weight * h.ret_1d, 3)
                     explained += h.contribution
+                if h.ret_1w is not None and h.weight is not None:
+                    h.contribution_1w = round(h.weight * h.ret_1w, 3)
+                    explained_w += h.contribution_1w
             except Exception:
                 continue
         p.explained_move = round(explained, 3) if p.holdings else None
+        p.explained_move_1w = round(explained_w, 3) if p.holdings else None
 
         # Peers
         for peer in (peer_tickers or [])[:3]:

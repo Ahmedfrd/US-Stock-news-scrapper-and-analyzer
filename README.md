@@ -1,292 +1,190 @@
-# 📈 Market & Macro Digest
+# 📈 Market & Macro Digest — US
 
-A free, automatic, off-machine research brief for your portfolio. Every weekday
-morning it scrapes finance + macro + crypto news, pulls the fundamentals,
-technicals, and crowd-sentiment data behind it, has a free AI analyse everything,
-and emails you **two reports** (all analysis written as scannable bullet points):
+A free, automatic, off-machine research brief. It runs on GitHub Actions and
+emails you **two reports on two cadences** — nothing runs on your computer.
 
-- **📊 Portfolio Digest** — your holdings in depth, plus a portfolio-wide
-  look-through concentration view.
-- **🇺🇸 Market Digest US** — the general market: global flags, detailed sector
-  highlights, Shariah-screened *stocks to watch* (US-listed, large or mid cap,
-  picked for actionable near-term news catalysts, each fully analysed like a
-  holding), a major-coins crypto section, industries & themes, and macro.
-  Daily by default; set `market_digest_day` to a UTC weekday to make it weekly.
+| Email | Cadence | What it covers |
+|---|---|---|
+| **🇺🇸 Market Digest US** | **Daily** — every scheduled run, Mon–Sat 07:00 HKT | What happened in the market *since the previous email* |
+| **📊 Weekly Portfolio Digest US** | **Weekly** — Saturday 07:00 HKT (after Friday's close) | The week's news on **your holdings** and how each one travelled |
 
-Runs on GitHub's servers on a schedule. **Nothing runs on your own computer.**
-Everything is free (one optional key adds multi-source crowd sentiment).
+The two emails never share a section: market, macro, sector and policy news
+lives only in the daily email; your holdings live only in the weekly one.
 
 ---
 
-## What's in each report
+## 🇺🇸 Market Digest (daily)
 
-### 📊 Portfolio Digest
-- **Engine banner** — which AI produced the analysis (or that the free local
-  heuristic ran, and why).
-- **Portfolio overview** + **global market flags** (Brent, WTI, gold, DXY,
-  S&P 500, Nasdaq, 10Y yield, Bitcoin, Ethereum — with % moves).
-- **Portfolio look-through** — your *true* exposure to companies and sectors
-  across direct holdings **and** what your ETFs hold underneath, with overlap
-  and concentration warnings. Add a `weight:` to each holding for real
-  allocation; otherwise equal weight is assumed (and stated).
-- **What matters today** — holdings ranked by materiality of the day's news.
-- **A full card per holding** (stock or ETF) — see below.
-- **Macro backdrop** — detailed paragraph + figure-cited bullets, then **Risks**
-  and **Key Upcoming Events** as bulleted closing sections.
+1. **TL;DR** — 3–5 lines: what moved, by how much, and why.
+2. **Market levels** — S&P 500, Nasdaq, Dow, Russell 2000, VIX, 10Y yield, DXY,
+   gold, Brent, WTI, BTC, ETH.
+3. **Policy & rates** — computed facts (Fed funds rate, the exact date/time of
+   the next FOMC decision, 10Y yield) plus the AI's read of Fed/central-bank news.
+4. **Macro data** — prints released in the news window as *actual vs consensus
+   vs previous* (CPI, payrolls, retail sales, ISM, …) plus what they mean.
+5. **Global news & impact** — China, Europe, Japan, geopolitics, trade, oil
+   supply — and their effect on US markets.
+6. **Sectors** — a sector-ETF scoreboard (1-day / 5-day), then a box for each
+   sector that **had news** (technology, consumer, energy & oil, financials,
+   health care, industrials, real estate).
+7. **Stocks to watch — at most three.** Drawn from a whole-market scan (never
+   your holdings), Shariah-screened, each with a **named catalyst**. Any buy or
+   sell call carries a **Catalyst Thesis**: catalyst, how it reaches the price,
+   what is already priced in, horizon, what would prove it wrong, what to verify
+   first — with every price level *computed in Python* (support/resistance,
+   ATR, distance to levels), never invented by the AI. A buy/sell the judge
+   cannot back with a complete thesis is withheld and shown as WATCH.
+8. **Crypto** — major coins, compact.
+9. **Coming up — exact dates** — next 14 days of scheduled releases and
+   decisions with date, New York time and Hong Kong time, consensus/previous.
+10. **Risks to watch**, and a **recent-picks scorecard** (price move since each
+    pick was flagged).
 
-### 🇺🇸 Market Digest US
-- Daily by default; set `market_digest_day` to a UTC weekday for weekly.
-- **Market overview** + **global market flags**.
-- **Sector highlights** — sectors affected by the day's news flow, each
-  bullish/bearish/neutral with 3–5 detailed, figure-cited bullets.
-- **Whole-market scan** — the discovery pool. Every run scans the *entire* US
-  market's news flow (general wires, broad business RSS, catalyst searches),
-  works out which companies the day's stories are actually about, and prices
-  them. The table lists those candidates with their move and lead story, ticking
-  the ones taken forward. See [Whole-market scan](#whole-market-scan) below.
-- **Stocks to watch** — names drawn from that market-wide pool, **not** from
-  your portfolio or your ETFs' holdings, **Shariah-screened** when
-  `shariah_only: true`, each given the *same full analysis* as a holding plus a
-  compliance badge with the debt/cash ratios.
-- **Crypto — major coins** — market call with figure-cited drivers; every coin
-  in your `crypto_watch` list gets a combined buy/hold/sell call, price + 1d/7d
-  moves, Adanos crowd sentiment, collapsible technicals, and crypto news links.
-- **Industries & themes** — your topics as detailed paragraphs, with key
-  non-portfolio companies driving each.
-- **Weekly sector deep-dive** (once a week) with read-across to your holdings.
-- **Macro** — detailed paragraph, figure bullets, then **Risks** and **Key
-  Upcoming Events** as bulleted closing sections (each event/risk one line,
-  e.g. "15-Jul, 8:30am ET: US CPI print").
+## 📊 Weekly Portfolio Digest
 
-### The per-name card (holdings and stocks-to-watch get identical treatment)
-News first, noise last — in this order:
-1. **Header** — price + move · news tone · crowd consensus one-liner (with
-   total mention count) · impact & sentiment badges.
-2. **The news** — a detailed bulleted read of the day's headlines on the name,
-   plus a highlighted **news-impact-on-the-company** box and a divergence flag.
-   For an ETF, the news summary of what its underlying holdings did today and
-   what it means for the fund ("what moved it" + "holdings news & impact")
-   appears here too — as prose, not a raw article dump.
-3. **Crowd sentiment panel** (Adanos: Reddit · X · News · Polymarket) —
-   per-source bullish/neutral/bearish stacked bars, buzz, **mentions** (how many
-   people are actually talking, so you can judge whether the %s represent a big
-   population), trend, and a blended consensus.
-4. **Technical analysis** — RSI, MACD, ATR, SMA/EMA, volume,
-   support/resistance, the **rule-based signal** (deterministic reference) and
-   the **technical read** (the AI's own call, which may override the rules with
-   reasoning) in one box.
-5. **Fundamentals** — factor scores (Value / Growth / Profit / Momentum /
-   Health + composite), valuation, growth, margins, analyst target, next
-   earnings; earnings & outlook with management commentary from SEC filings.
-6. **Research verdict** — the 3-model bull/bear/judge debate.
-7. **Source articles** — a plain, always-visible list at the end of the card
-   (full articles are read, not just headlines).
+1. **Your portfolio this week** — overview bullets + a scoreboard (price, week,
+   1 month, verdict last week → this week).
+2. **One card per holding**: this week's news (only if there was any), ETF
+   component-company news (only components with news), **how it travelled**
+   (day-by-day closes, week vs benchmark, last 4 weeks, RSI and volume over the
+   week), earnings, compact technicals and fundamentals, and the **verdict**.
+3. **Verdict = bull · bear · judge as short pointers** (3 + 3 + 2–3). Every
+   role reads *this week's* news and price progression, and the judge sees
+   **last week's verdict** (stored in `state/state.json`) and says what changed.
+4. **Look-through** exposure across your ETFs, **coming up for your holdings**
+   (earnings dates), **risks to your holdings**.
 
-**ETF cards** additionally show: multi-horizon returns (1d→1y, YTD), risk
-(volatility, max drawdown, beta), NAV premium/discount, expense/yield/AUM,
-**move attribution by holding** (which components drove today's move, with a
-summed "explained move"), sector weights, vs-benchmark and vs-competitor-ETF
-tables — plus the component breakdown below.
-
-#### Component companies — news by company
-
-A fund is a basket of businesses, so ETF cards report it that way. Each of the
-top `etf_holdings_news` holdings (default 8) gets **its own block**:
-
-- the company's name, its **weight in the fund**, its **1-day move**, and how
-  many points of the fund's move it explains;
-- what actually happened at *that company* today — the deal size, guidance
-  figure, lawsuit, upgrade with the new target — read from the article body, not
-  the headline, with a bullish/bearish/neutral call;
-- one line on how it feeds through to the fund;
-- **that company's own article links**, under its own heading.
-
-News is queried by company name (so foreign constituents like Samsung/SK Hynix
-are covered properly). The fund's own news stays at the end of the card. When
-no AI is available, the same per-company blocks are still built from each
-holding's headlines and its measured contribution.
-
-### Whole-market scan
-
-Stocks-to-watch used to be picked out of news the digest had already fetched for
-*your* names — your tickers, your ETFs' holdings, your topics — so every
-suggestion was portfolio-adjacent by construction. It can't be any more. Each
-run now also:
-
-1. **Scans the market at large** — Finnhub's general news wire, broad business
-   RSS (CNBC, Yahoo Finance, MarketWatch, Investing.com, Seeking Alpha), and a
-   dozen catalyst-shaped searches ("stock surges after…", "price target raised",
-   "FDA approval", "merger agreement", "IPO debut", …).
-2. **Resolves companies from the stories** — explicit tickers (`(NASDAQ: ABCD)`,
-   `$ABCD`), the wire's own ticker tags, and company **names** matched against
-   Finnhub's full US symbol directory.
-3. **Prices every candidate** — today's move, 5-day move, and volume vs average,
-   in one batched request — then ranks by coverage and movement.
-4. **Reads the lead story in full** for the top candidates, so the AI is judging
-   substance rather than a headline.
-
-That pool goes to the AI as the explicit source for stocks-to-watch, and tops up
-the list directly if the model leans on familiar names. Portfolio holdings are
-excluded (they already have their own cards). Everything is tunable under
-`market_scan:` in `config.yaml`; set `enabled: false` to switch it off.
+**No news → no placard.** A name or sector with no articles gets no news block
+(and no "no news" filler). The AI is told so, and the code blanks any news text
+for a name that had no articles.
 
 ---
+
+## Schedule & manual runs
+
+`.github/workflows/main.yml` fires at `0 23 * * 0-5` (UTC) = **07:00 HKT Mon–Sat**.
+- Every scheduled run sends the **Market Digest**.
+- On `schedule.portfolio_day` (default `Sat`, HK-local weekday) it also sends
+  the **Portfolio Digest**.
+- The market news window starts exactly where the previous scheduled email's
+  window ended (remembered in `state/state.json`), so GitHub's start delays
+  never cause gaps or repeats; Monday's edition covers the weekend.
+
+**Actions → Market Digest → Run workflow** offers:
+- **report**: `both` (default) / `market` / `portfolio` / `auto` (scheduled behaviour)
+- **dry_run**: build only — the HTML is uploaded as the `digest` artifact, no
+  email is sent and no state is saved. Use this to check changes without
+  burning LLM quota on real sends.
+
+## Exact-date calendar — where the dates come from
+
+Nothing in the calendar is written by the AI.
+- **Federal Reserve FOMC page** — meeting dates (decision on the 2nd day, 14:00 ET).
+- **ForexFactory weekly JSON** — this week's events with full timestamps,
+  forecast and previous.
+- **Nasdaq economic calendar** — the following weeks + actuals for released
+  prints. Its date parameter is **off by one day** (verified 5 Oct 2026), so the
+  offset is calibrated on every run against TreasuryDirect auction dates and
+  the FOMC calendar; if calibration is inconclusive, Nasdaq is not used.
+- **TreasuryDirect** — 10Y/30Y auction dates.
 
 ## Data sources (all free)
 
 | Data | Source | Key |
 |------|--------|-----|
-| News (direct publisher links, full articles) | Finnhub company-news + Marketaux + Google News RSS | `FINNHUB_API_KEY` (free) |
-| Fundamentals, prices, targets, ETF holdings | Yahoo Finance (`yfinance`) | none |
-| Technicals (stocks **and** crypto) | computed from Yahoo prices | none |
-| Earnings calendar + surprises | Finnhub | `FINNHUB_API_KEY` |
-| Earnings results / outlook / management commentary | SEC EDGAR filings | none (set `SEC_USER_AGENT`) |
-| News tone | VADER (offline) | none |
-| **Crowd sentiment** (Reddit · X · News · Polymarket, stocks + crypto) | **Adanos** | `ADANOS_API_KEY` (free, 250 req/mo) |
-| Crypto prices | Yahoo Finance | none |
-| Macro | Fed / Treasury / ECB RSS | none |
-| Shariah screen | computed (sector + balance sheet) | none |
-| AI analysis | Gemini (Groq / OpenRouter fallback) | one free key |
-| Hosting / schedule | GitHub Actions | free |
+| Company news (direct links, full articles) | Finnhub + Marketaux + Google News RSS | `FINNHUB_API_KEY`, `MARKETAUX_API_KEY` (optional) |
+| Market news | CNBC, MarketWatch, Yahoo, Investing.com, Seeking Alpha RSS + catalyst searches + per-theme Google News | none |
+| Official releases | Federal Reserve, ECB, BLS, BEA RSS (the US Treasury RSS is dead — 404) | none |
+| Calendar | Fed, ForexFactory, Nasdaq, TreasuryDirect | none |
+| Fundamentals, prices, ETF holdings | Yahoo Finance (`yfinance`) | none |
+| Earnings calendar / surprises | Finnhub | `FINNHUB_API_KEY` |
+| Filings | SEC EDGAR | `SEC_USER_AGENT` |
+| Crowd sentiment | Adanos (Reddit · X · News · Polymarket) | `ADANOS_API_KEY` |
+| AI | Gemini → Groq → OpenRouter (free tiers) → rule-based fallback | one free key |
 
-No AI key at all → a local heuristic still produces both reports (clearly labelled).
+**Free AI models rot.** Groq and OpenRouter retire free models often (both
+defaults died in September). `providers.py` reads each provider's live model
+list at run time and walks to the next working model when one is gone or
+restricted. OpenRouter's own `openrouter/free` router is tried first.
 
 ---
 
 ## Setup (off-machine, ~15 min)
 
 ### 1. Free keys (no credit card)
-- **Gemini**: ai.google.dev → Get API key.
+- **Gemini**: ai.google.dev → Get API key (add up to 3 keys from separate Google
+  accounts as `GEMINI_API_KEY`, `_2`, `_3` — each has its own quota).
 - **Finnhub**: finnhub.io → sign up → copy key.
 - **Adanos** (crowd sentiment): adanos.org → register → key emailed.
 
-### 2. Repo
-Create a **private** GitHub repo and upload the project files. The drag-and-drop
-uploader skips the hidden `.github` folder, so create the workflow via
-**Actions → set up a workflow yourself** and paste in
-`.github/workflows/main.yml`.
-
-### 3. Secrets — AND the workflow env block
-Repo → **Settings → Secrets and variables → Actions → Secrets tab → New
-repository secret** (must be *Secrets*, not *Variables*):
+### 2. Secrets
+Repo → **Settings → Secrets and variables → Actions → Secrets → New repository secret**:
 
 | Secret | Value |
 |--------|-------|
-| `GEMINI_API_KEY` | Gemini key |
+| `GEMINI_API_KEY` (+ `_2`, `_3`) | Gemini keys |
+| `GROQ_API_KEY` / `OPENROUTER_API_KEY` | AI fallbacks + debate roles |
 | `FINNHUB_API_KEY` | Finnhub key |
-| `ADANOS_API_KEY` | Adanos key (enables the crowd panels) |
+| `MARKETAUX_API_KEY` | optional second news source |
+| `ADANOS_API_KEY` | crowd sentiment |
 | `SEC_USER_AGENT` | `Your Name your@email.com` |
 | `EMAIL_PASSWORD` | Gmail **App Password** (16 chars) |
-| `GROQ_API_KEY` / `OPENROUTER_API_KEY` | optional AI fallbacks |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | only for Telegram delivery |
 
-⚠️ **A secret only reaches the program if the workflow's `env:` block maps it**
-(`ADANOS_API_KEY: ${{ secrets.ADANOS_API_KEY }}` etc.). The included
-`daily-digest.yml` maps all of them — if you hand-edited the workflow, verify.
-The run log prints an `[env] ...=set|MISSING` line so you can confirm at a glance.
+A secret only reaches the program if the workflow's `env:` block maps it; the
+run log prints `[env] KEY=set|MISSING` so you can confirm at a glance.
+**Gmail App Password:** enable 2-Step Verification → myaccount.google.com/apppasswords.
 
-**Gmail App Password:** enable 2-Step Verification, then
-myaccount.google.com/apppasswords → create → paste the 16-character code into
-`EMAIL_PASSWORD`. Regular Gmail passwords are rejected for SMTP.
+### 3. Configure (`config.yaml`)
+- `schedule.portfolio_day` — weekday of the weekly email (HK time, default `Sat`).
+- `watchlist.stocks` — holdings (+ optional `name`, `weight` %, `peers`). ETFs supported.
+- `market_themes` — the daily email's sections and sectors: each has a news
+  `query`, wire-story `keywords`, `kind` (`section` / `sector`) and, for
+  sectors, the `etf` whose move is printed next to it.
+- `sector_etfs` — the sector scoreboard.
+- `market_scan.watch_max` — stocks to watch shown (max 3); `watch_pool` — how
+  many the AI ranks before screening.
+- `calendar.horizon_days` — calendar window (default 14).
+- `shariah_only`, `crypto_watch`, `market_flags`, `etf_holdings_news`,
+  `analysis.*` (AI chain, debate roles), `delivery.*`.
 
-### 4. Configure
-Edit `config.yaml` in GitHub: your holdings (ETFs fully supported; optional
-`weight`, `peers`), topics, `shariah_only`, `crypto_watch`, delivery email.
-YAML is indentation-sensitive — use spaces only, keep keys inside one holding
-aligned, and validate before committing if unsure.
-
-### 5. Run
-Schedule is set in the workflow `cron` (UTC). Default `0 23 * * 0-4` =
-**07:00 Hong Kong, Mon–Fri**. Test now: **Actions → Run workflow**, then read
-the emails or download the **digest** artifact (contains both HTML reports).
-
-> **Local dev (optional):** `pip install -r requirements.txt`, copy
-> `.env.example` → `.env` with your keys, `python main.py --dry-run`.
+> **Local dev:** `pip install -r requirements.txt`, copy `.env.example` → `.env`,
+> then `python main.py --report both --dry-run` (or `--no-ai` with no keys).
 
 ---
 
-## Configuration reference (`config.yaml`)
-- `watchlist.stocks` — tickers (+ optional `name`, `weight` %, `peers`).
-- `watchlist.topics` — free-text themes for the Market report.
-- `etf_benchmark` — benchmark for ETF relative performance/beta (default SPY).
-- `shariah_only` — filter stocks-to-watch to Shariah-compliant names.
-- `crypto_watch` — major coins for the crypto section (`[]` disables).
-- `market_flags` — omit for defaults, `[]` to hide, or customise.
-- `weekly_sector_day` — UTC weekday for the weekly deep-dive (`Thu` = Friday-morning HK).
-- `market_digest_day` — `daily` (default) sends the Market Digest every run;
-  a UTC weekday name (e.g. `Thu`) makes it weekly instead.
-- `sources.*` — news toggles, `fetch_full_articles`, `relevance_filter`,
-  `adanos_platforms` (`[reddit, x, news, polymarket]`), `lookback_hours`.
-- `market_scan.*` — the whole-market discovery pass behind stocks-to-watch:
-  `enabled`, `finnhub_general`, `broad_feeds`, `catalyst_search`,
-  `catalyst_queries` (override the built-in list), `max_candidates`,
-  `min_move_pct` (e.g. `2` to only consider names that moved ≥2%),
-  `full_articles_for_top`, `watch_max`.
-- `etf_holdings_news` — how many of a fund's top holdings get their own news
-  section (default 8).
-- `analysis` — AI chain: gemini → groq → openrouter → heuristic.
-- `delivery` — email / telegram / both / none.
-
-## Pipeline
-1. **Collect** news (Finnhub first for direct links; Google News; macro feeds) →
-   relevance-filter noise → read full articles.
-2. **Scan the whole market** — general wires + broad RSS + catalyst searches →
-   resolve companies from the stories → price and rank them as candidates.
-3. **Portfolio data** — fundamentals, technicals, deep ETF analysis (including a
-   news pull per component company), earnings, filings.
-4. **Sentiment + crowd + flags + crypto** — VADER tone, Adanos multi-source crowd,
-   market snapshot, coin prices/technicals/news.
-5. **Analyse portfolio** (AI) → cards, sector highlights, watch tickers, crypto calls.
-6. **Deep-analyse stocks to watch** — drawn from the market-wide pool,
-   Shariah-screened, full data fetched, re-analysed.
-7. **Build two reports** → save → email both.
-
 ## Module map
 ```
-config.yaml       watchlist + settings (no secrets)
-sources.py        news collection + whole-market scan + relevance filter + full articles
-discovery.py      market-wide candidate discovery: stories -> companies -> priced movers
-fundamentals.py   yfinance fundamentals + factor scores (+ ETF detection, debt/cash)
-etf.py            deep ETF analysis: returns, attribution, NAV, risk, peers
-technicals.py     RSI/MACD/ATR/SMA-EMA/volume/S-R + rule-based signal (stocks & crypto)
-shariah.py        automated Shariah screen (business activity + 33% debt/cash ratios)
-market_data.py    Finnhub: company news, earnings calendar/surprises, peers
-filings.py        SEC EDGAR: latest filings + MD&A/outlook excerpt
-sentiment.py      VADER news tone (offline)
-social.py         Adanos multi-source crowd sentiment (stocks + crypto) + diagnostics
-portfolio.py      look-through company + sector concentration
-providers.py      free LLM layer (Gemini/Groq/OpenRouter) + fallback chain
-analyzer.py       fuses everything → structured analysis (AI owns the calls)
-digest.py         renders the two phone-friendly reports (HTML + text)
-delivery.py       email + Telegram
-main.py           orchestrates the two-report run (+ [env]/[adanos] diagnostics)
-.github/workflows/main.yml   scheduler + secrets mapping + artifact upload
+main.py           decides which email(s) to build; daily market + weekly portfolio pipelines
+config.yaml       holdings, themes, schedule (no secrets)
+sources.py        news collection, exact news window, junk/relevance filters, market themes
+discovery.py      whole-market scan: stories -> companies -> priced candidates
+econ_calendar.py  exact-date calendar (Fed, ForexFactory, Nasdaq-calibrated, Treasury)
+analyzer.py       the two AI analyses (portfolio weekly, market daily) + debates
+debate.py         bull / bear / judge pointers; catalyst thesis for picks
+thesis.py         Catalyst Thesis figures (computed) + completeness check
+prices.py         cached daily bars + weekly progression maths
+state.py          run-to-run memory (state/state.json, committed by the workflow)
+fundamentals.py   yfinance fundamentals + factor scores
+etf.py            ETF analysis: returns, weekly attribution by component, peers
+technicals.py     RSI/MACD/ATR/SMA/volume/S-R + rule-based signal
+shariah.py        automated Shariah screen
+market_data.py    Finnhub: news, earnings calendar, symbol directory
+filings.py        SEC EDGAR filings
+social.py         Adanos crowd sentiment
+portfolio.py      look-through exposure
+providers.py      free LLM layer with live model discovery + fallbacks
+digest.py         renders both emails (inline-styled HTML + plain text)
+delivery.py       email / Telegram
 ```
 
-## Free-tier budget (typical: 5 holdings, weekday runs)
-- **Adanos**: ~9 requests/run ≈ 190/month vs 250 free — fine, but trim
-  `adanos_platforms` if you add many tickers.
-- **Gemini**: ~3 calls/run vs ~1,500/day free — trivial.
-- **Finnhub**: per-minute limit (60), never approached.
-- **GitHub Actions**: a few minutes/run vs 2,000 free minutes/month.
-- **Yahoo**: no formal tier; heavy ETF watchlists can see occasional throttling
-  (fields degrade to "n/a", the run continues).
-
 ## Honest limitations
-- **Not investment advice.** All signals, reads, and calls describe the current
-  setup; they are not recommendations or forecasts. The AI only sees the data
-  it's given and can be wrong. Do your own research.
-- **The Shariah screen is an automated heuristic**, not a certified ruling — it
-  can't check receivables or the <5% impermissible-income screen. Verify with
-  Zoya / Musaffa / IdealRatings before acting.
-- **Free data has gaps**, especially for niche/new ETFs (holdings, expense, NAV
-  may be n/a) and thinly-covered tickers (little news → tone n/a).
-- **Crowd sentiment covers what people actually discuss** — rich for popular
-  stocks and major coins, sparse for niche Shariah ETFs.
-- **Company-level ETF look-through** uses disclosed top ~10 holdings (largest
-  overlaps); sector-level look-through is complete.
-- **SEC filings** are US-listed companies only.
-- Scheduled runs can be delayed minutes at peak; GitHub pauses schedules after
-  60 days of repo inactivity (visit the repo occasionally).
-
-See `COMPARISON.md` for how this stacks up against paid tools.
+- **Not investment advice.** Calls describe the current setup, not forecasts.
+- **The Shariah screen is automated**, not a certified ruling — verify with
+  Zoya / Musaffa before acting.
+- **Free data has gaps** (niche ETFs, thinly covered tickers). Missing data is
+  left out rather than padded.
+- **Free LLM tiers rate-limit.** Each manual non-dry run emails you and burns
+  quota; prefer a dry run and read the artifact.
+- GitHub pauses schedules after 60 days without repo activity — the daily state
+  commit keeps the repo active.

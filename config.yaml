@@ -4,19 +4,24 @@
 #  Actions secrets — never this file. See README.md.
 # =====================================================================
 
+# Two emails on two cadences (see README → Schedule):
+#   * Market Digest US    — DAILY, every scheduled run (Mon–Sat 07:00 HKT)
+#   * Portfolio Digest US — WEEKLY, on portfolio_day (an HK-local weekday)
+# Manual "Run workflow" runs send both unless you pick one in the run form.
+schedule:
+  portfolio_day: Sat              # Saturday 07:00 HKT = right after Friday's US close
+  portfolio_lookback_days: 7
+
 watchlist:
   stocks:
     - ticker: LLY
       name: Eli Lilly
       # weight: 15          # optional: % of portfolio, for the look-through panel.
-      #                     # Add to every holding for real allocation; omit all for equal-weight.
       # peers: [AMD, AVGO]  # optional; auto-filled from Finnhub if omitted
     - ticker: ELS
       name: Equity LifeStyle Properties Inc
       peers: [PLD, EQR]
-
-    # ETFs are fully supported (deep fund analysis). List peer ETFs to compare
-    # against; the benchmark for relative performance + beta is etf_benchmark below.
+    # ETFs are fully supported (fund analysis + news on each major component).
     - ticker: HLAL
       name: Wahed FTSE USA Shariah ETF
       peers: [SPSK]
@@ -25,106 +30,138 @@ watchlist:
       peers: [SPWO]
     - ticker: SPRE
       name: SP Funds S&P Global REIT Sharia ETF
-  topics:
-    - "Technology and semiconductor industry"
-    - "S&P 500 stock market"
-    - "US inflation and interest rates"
-    - "IPOs"
-    - "gold and safe-haven assets"
 
-# Benchmark for ETF relative-performance + beta.
+# Benchmark for the weekly progression (vs-benchmark) and ETF beta.
 etf_benchmark: SPY
 
-# Shariah screen: when true, "stocks to watch" are filtered to Shariah-compliant
-# names (automated business-activity + debt/cash screen — verify with a certified
-# service like Zoya/Musaffa before acting). Set false to disable.
+# Shariah screen for stocks-to-watch (automated business-activity + debt/cash
+# screen — verify with a certified service like Zoya/Musaffa before acting).
 shariah_only: true
 
-# Crypto highlight in the Market Digest US — MAJOR coins only. Set [] to disable.
-crypto_watch: [BTC, ETH, SOL, XRP, BNB, HYP]
+# Crypto snapshot in the Market Digest — major coins only. Set [] to disable.
+crypto_watch: [BTC, ETH, SOL, XRP, BNB]
 
-# Global market flags shown at the top (oil, gold, dollar, indices, yields).
-# Omit this key to use the sensible defaults; set to [] to hide the section;
-# or customise, e.g.  market_flags: [{name: Brent, symbol: "BZ=F"}, {name: Gold, symbol: "GC=F"}]
+# Market levels shown at the top of the Market Digest. Omit for the defaults
+# (S&P 500, Nasdaq, Dow, Russell 2000, VIX, 10Y, DXY, gold, Brent, WTI, BTC, ETH).
+# market_flags: [{name: Brent, symbol: "BZ=F"}, {name: Gold, symbol: "GC=F"}]
+
+# Sector ETF scoreboard in the Market Digest (1-day and 5-day moves).
+sector_etfs:
+  - {label: Technology, symbol: XLK}
+  - {label: Semiconductors, symbol: SMH}
+  - {label: Consumer discretionary, symbol: XLY}
+  - {label: Consumer staples, symbol: XLP}
+  - {label: Energy, symbol: XLE}
+  - {label: Financials, symbol: XLF}
+  - {label: Health care, symbol: XLV}
+  - {label: Industrials, symbol: XLI}
+  - {label: Real estate, symbol: XLRE}
+  - {label: Utilities, symbol: XLU}
+  - {label: Materials, symbol: XLB}
+  - {label: Communication services, symbol: XLC}
+
+# The Market Digest's sections. Each theme gets its own news search; whole-market
+# wire stories matching its keywords are folded in. kind: section = its own
+# heading (policy & rates, macro data, global); kind: sector = a sector box,
+# shown only when that sector had news in the window. etf = the sector ETF whose
+# move is printed next to it. A keyword ending in * matches as a prefix.
+market_themes:
+  - label: "Policy & rates"
+    kind: section
+    query: ["Federal Reserve interest rates", "Treasury yields bond market"]
+    keywords: [fed, fomc, powell, warsh, rate cut*, rate hike*, treasury yield*, bond yield*, central bank*, ecb, boj, "bank of england"]
+  - label: "Macro data"
+    kind: section
+    query: ["US economy inflation jobs report data", "US CPI OR payrolls OR retail sales OR GDP report"]
+    keywords: [cpi, inflation, payroll*, jobs report, unemployment, jobless claims, retail sales, gdp, pce, ism, consumer sentiment, ppi]
+  - label: "Global"
+    kind: section
+    query: ["global markets stocks China Europe Japan", "tariffs OR trade war OR geopolitical tensions markets"]
+    keywords: [china, chinese, europe*, japan*, tariff*, trade war, sanction*, geopolit*, middle east, russia, ukraine, israel, iran]
+  - label: "Technology"
+    kind: sector
+    etf: XLK
+    query: "tech stocks semiconductors AI"
+    keywords: [nvidia, semiconductor*, chipmaker*, chip stock*, software, artificial intelligence, apple, microsoft, alphabet, meta, amd, broadcom, tsmc, data center*]
+  - label: "Consumer"
+    kind: sector
+    etf: XLY
+    query: "consumer stocks retail spending"
+    keywords: [retailer*, consumer spending, walmart, target, costco, amazon, nike, mcdonald*, starbucks, consumer goods, procter, coca-cola, pepsi*]
+  - label: "Energy & oil"
+    kind: sector
+    etf: XLE
+    query: "oil prices crude OPEC"
+    keywords: [oil, crude, brent, wti, opec*, natural gas, exxon, chevron, refiner*, energy stocks]
+  - label: "Financials"
+    kind: sector
+    etf: XLF
+    query: "bank stocks Wall Street banks earnings"
+    keywords: [bank stocks, jpmorgan, goldman, morgan stanley, wells fargo, citigroup, bank of america, lender*, insurer*]
+  - label: "Health care"
+    kind: sector
+    etf: XLV
+    query: "healthcare pharma biotech stocks FDA"
+    keywords: [fda, pharma*, biotech*, drugmaker*, eli lilly, novo nordisk, pfizer, merck, unitedhealth, clinical trial*]
+  - label: "Industrials"
+    kind: sector
+    etf: XLI
+    query: "industrial stocks manufacturing aerospace"
+    keywords: [boeing, caterpillar, industrial*, manufactur*, airline*, railroad*, defense contractor*]
+  - label: "Real estate"
+    kind: sector
+    etf: XLRE
+    query: "REIT real estate stocks mortgage rates"
+    keywords: [reit*, real estate, mortgage rate*, housing market, home sales, homebuilder*]
+
+calendar:
+  horizon_days: 14                # "Coming up — exact dates" window
 
 sources:
   google_news: true
-  yahoo_finance: false          # OFF: yfinance .news returns generic market items, not
-                              # ticker-specific — Finnhub + Google News cover it with relevance
-  finnhub: true               # company news w/ real article links (key: FINNHUB_API_KEY)
-  social: true                # crowd sentiment via ADANOS (Reddit; set ADANOS_API_KEY,
-                              # free 250/mo) for bullish/bearish %% + buzz. Falls back to
-                              # keyless ApeWisdom (buzz only) if no key.
-  macro_feeds: true
-  extra_rss:
-    - "https://feeds.marketwatch.com/marketwatch/topstories/"
-  fetch_full_articles: true   # read the FULL article (not just headline) for up to 3
-                              # items/group; follows Finnhub links to the real publisher
-  relevance_filter: true      # drop generic market-roundup items that don't actually
-                              # discuss the ticker (reduces noise)
-  adanos_platforms: [reddit, x, news, polymarket]  # crowd sentiment sources (Adanos)
-  max_items_per_query: 8
-  lookback_hours: 24
+  yahoo_finance: false          # OFF: yfinance .news returns generic market items
+  finnhub: true                 # company news w/ real article links (FINNHUB_API_KEY)
+  marketaux: true               # optional second ticker-tagged source (MARKETAUX_API_KEY)
+  social: true                  # crowd sentiment via Adanos (ADANOS_API_KEY)
+  adanos_platforms: [reddit, x, news, polymarket]
+  macro_feeds: true             # Fed, ECB, BLS, BEA official releases
+  extra_rss: []
+  fetch_full_articles: true     # read the FULL article for the top items
+  full_articles_per_theme: 2
+  relevance_filter: true        # drop roundup items that don't actually discuss the ticker
+  max_items_per_query: 8        # per holding (weekly window)
+  max_items_per_theme: 6        # per market theme search (daily window)
+  lookback_hours: 24            # fallback only — main.py sets the exact window
 
-# ---------------------------------------------------------------------------
-# WHOLE-MARKET SCAN — where "stocks to watch" come from.
-# Without this, the digest only ever saw news it fetched for YOUR names, so every
-# recommendation was portfolio-adjacent by construction. This scans the market at
-# large (general wires + broad business RSS + catalyst searches), works out which
-# companies the stories are actually about, prices them, and hands that pool to
-# the AI. Names you have never held can surface purely on their news.
+# Whole-market scan — where stocks-to-watch come from (never your holdings).
 market_scan:
   enabled: true
-  finnhub_general: true       # Finnhub /news general feed (needs FINNHUB_API_KEY)
+  finnhub_general: true
   finnhub_max: 40
-  broad_feeds: true           # CNBC / Yahoo / MarketWatch / Investing / Seeking Alpha
-  catalyst_search: true       # Google News searches for catalyst-shaped stories
-  # catalyst_queries: []      # override the built-in query list if you want
-  # extra_rss: []             # additional whole-market feeds
+  broad_feeds: true
+  catalyst_search: true
   max_items_per_query: 10
-  max_items: 220              # cap on scanned headlines per run
-  max_candidates: 25          # priced candidate companies handed to the AI
-  min_move_pct: 0             # e.g. 2 to only consider names that moved ≥2% today
-  full_articles_for_top: 8    # read the lead story in FULL for the top N candidates
-  watch_max: 6                # how many stocks-to-watch get the full deep-dive
-  # watch_pool: 12            # candidates fetched to screen from (default 2x watch_max).
-                              # Only matters with shariah_only — spares cover rejections.
-                              # Each spare costs a full data fetch, so keep it modest.
+  max_items: 220
+  max_candidates: 25
+  min_move_pct: 0
+  full_articles_for_top: 8
+  watch_pool: 5                 # AI ranks up to 5 …
+  watch_max: 3                  # … the email shows at most 3 (each with a catalyst)
 
-# Per-holding ETF coverage: how many of a fund's top holdings get their own news
-# section (each component company is reported separately, with its own headlines).
-etf_holdings_news: 8
+# Per-ETF component coverage in the weekly Portfolio Digest.
+etf_holdings_news: 6
 
 analysis:
   enabled: true
-  debate: true               # 3-layer bull/bear/judge verdict on selected names
-  debate_scope: all          # watch | holdings | all
-  debate_max: 8              # cap debated names/run (free-tier safety)
-  # Bull & bear run on Groq + OpenRouter (priority engines, so we spare Gemini's
-  # tight free quota); the judge is Gemini. Every debate role still falls back
-  # through ALL other available providers if its engine fails/rate-limits.
-  debate_providers: {bull: groq, bear: openrouter, judge: gemini}
-  provider: gemini            # gemini | groq | openrouter  (all free tiers)
+  provider: gemini              # gemini | groq | openrouter (all free tiers)
   model: gemini-2.5-flash
-  fallbacks: [groq, openrouter]   # tried in order if the primary (gemini) fails or
-                        # rate-limits. Previously this was [gemini] — same as the
-                        # primary — so the main analysis NEVER fell back to another
-                        # AI and dropped straight to the local heuristic whenever
-                        # Gemini 429'd. Groq is the most reliable free tier here, so
-                        # it goes first. If all AIs fail, the heuristic runs.
-                        # The report header always states what actually ran.
-
-# Weekly sector deep-dive runs on this weekday (news scraped over the past 7 days).
-# Keep it a weekday if your schedule only runs Mon–Fri.
-weekly_sector_day: Thu   # Thu UTC = Friday morning HK time (see README)
-
-# Market Digest cadence: "daily" sends it on every scheduled run (alongside the
-# Portfolio Digest). Set a UTC weekday name (e.g. Thu) to make it weekly instead.
-# Manual "Run workflow" runs always produce both regardless.
-market_digest_day: daily
+  fallbacks: [groq, openrouter] # then the rule-based fallback; the email says what ran
+  debate: true                  # bull · bear · judge pointers on holdings (weekly) and picks (daily)
+  debate_max: 8
+  debate_providers: {bull: groq, bear: openrouter, judge: gemini}
 
 delivery:
-  method: email               # email | telegram | both | none
+  method: email                 # email | telegram | both | none
   email:
     smtp_host: smtp.gmail.com
     smtp_port: 587

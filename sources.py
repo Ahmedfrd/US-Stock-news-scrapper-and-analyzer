@@ -12,6 +12,7 @@ Everything is defensive: if one source fails, the rest still run.
 
 from __future__ import annotations
 
+import re
 import time
 import datetime as dt
 from dataclasses import dataclass, field
@@ -22,10 +23,14 @@ import requests
 from bs4 import BeautifulSoup
 
 # Feeds that broadly cover macro / official releases.
+# US Treasury's press RSS (home.treasury.gov/rss/press.xml) returns HTTP 404 and
+# had been failing silently; BLS and BEA (primary statistical agencies) replace it.
+# All four verified live by the market-digest monorepo on 2026-09-04.
 MACRO_FEEDS = [
     ("Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml"),
-    ("US Treasury",     "https://home.treasury.gov/rss/press.xml"),
     ("ECB",             "https://www.ecb.europa.eu/rss/press.html"),
+    ("BLS",             "https://www.bls.gov/feed/bls_latest.rss"),
+    ("BEA",             "https://apps.bea.gov/rss/rss.xml"),
 ]
 
 # Broad, whole-market feeds. These are NOT tied to the watchlist — they exist so
@@ -60,6 +65,25 @@ CATALYST_QUERIES = [
 ]
 
 _UA = {"User-Agent": "Mozilla/5.0 (compatible; MarketNewsDigest/1.0)"}
+
+# Not news: listicles, evergreen explainers, quote pages and auto-generated
+# "trading report" spam. Filtered by TITLE, because syndication carries the same
+# piece through several publishers (lesson from the market-digest monorepo).
+_JUNK_TITLE = re.compile(
+    r"stocks? to (?:buy|watch|consider)|best (?:stocks?|shares?|etfs?)\b|\btop \d+\b|"
+    r"\b\d+ (?:stocks?|reasons|things|etfs?)\b|prediction:|price prediction|stock forecast|"
+    r"could look like|would be worth|if you(?:'d| had)? invested|should you (?:buy|sell)|better buy|"
+    r"stock quote|\bnews \| |facts to know before|share price today|share price,? news|"
+    r"is it too late|millionaire|\bretire|"
+    r"stock price,? news,? quote|quote (?:&|and) history|historical (?:prices|data)|stock price today|"
+    r"risk zones|volatility zones|tactical triggers|precision trading|rules-based execution|"
+    r"trading (?:report|signals?)\b|market (?:wrap|recap|roundup)|closing bell|opening bell",
+    re.I)
+_JUNK_SOURCES = {"stock traders daily"}
+
+
+def is_junk(title: str, source: str = "") -> bool:
+    return bool(_JUNK_TITLE.search(title or "")) or (source or "").strip().lower() in _JUNK_SOURCES
 
 
 @dataclass
@@ -96,14 +120,26 @@ def _parsed_to_dt(parsed) -> dt.datetime | None:
         return None
 
 
+# The exact news window for this run, set by main.py: (start_utc, end_utc). When
+# set it overrides lookback_hours, so consecutive daily emails neither overlap nor
+# leave a gap (the start is where the previous scheduled email's window ended).
+WINDOW: tuple[dt.datetime, dt.datetime] | None = None
+
+
+def set_window(start: dt.datetime, end: dt.datetime) -> None:
+    global WINDOW
+    WINDOW = (start, end)
+
+
 def _recent(published: dt.datetime | None, lookback_hours: int,
             keep_undated: bool = False) -> bool:
-    # For a freshness digest, an item we can't date is a liability, not a bonus:
-    # week-old stories slip through when their timestamp fails to parse. Default
-    # is now to DROP undated items. Macro/official feeds pass keep_undated=True
-    # because their releases are inherently recent even when the feed omits a date.
+    # For a freshness digest, an item we can't date is a liability: week-old
+    # stories slip through when their timestamp fails to parse, so undated items
+    # are DROPPED — except official/macro feeds (keep_undated=True).
     if published is None:
         return keep_undated
+    if WINDOW:
+        return WINDOW[0] <= published <= WINDOW[1]
     cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=lookback_hours)
     return published >= cutoff
 
@@ -131,12 +167,35 @@ def _parse_feed(url: str) -> feedparser.FeedParserDict:
 # --------------------------------------------------------------------------- #
 #  Google News RSS
 # --------------------------------------------------------------------------- #
+# Google News edition — US by default; the PK repo sets ("en-PK", "PK", "PK:en").
+EDITION = ("en-US", "US", "US:en")
+
+
+def configure(config: dict) -> None:
+    """Apply market-specific settings from config (edition, feed lists)."""
+    global EDITION, MACRO_FEEDS, BROAD_FEEDS
+    src = config.get("sources", {}) or {}
+    ed = src.get("news_edition")
+    if ed:
+        EDITION = (ed.get("hl", "en-US"), ed.get("gl", "US"), ed.get("ceid", "US:en"))
+    if "macro_feed_list" in src:
+        MACRO_FEEDS = [(f["name"], f["url"]) for f in (src.get("macro_feed_list") or [])]
+    bf = (config.get("market_scan", {}) or {}).get("broad_feed_list")
+    if bf is not None:
+        BROAD_FEEDS = [(f["name"], f["url"]) for f in bf]
+
+
+def _gn_url(q: str) -> str:
+    hl, gl, ceid = EDITION
+    return f"https://news.google.com/rss/search?q={q}&hl={hl}&gl={gl}&ceid={ceid}"
+
+
 def google_news(query: str, group: str, group_type: str,
                 max_items: int, lookback_hours: int) -> list[NewsItem]:
     # Window tracks the configured lookback instead of a hardcoded 2 days.
     when = f"{lookback_hours}h" if lookback_hours < 48 else f"{lookback_hours // 24}d"
     q = quote_plus(f"{query} when:{when}")
-    url = f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
+    url = _gn_url(q)
     feed = _parse_feed(url)
     items: list[NewsItem] = []
     for e in feed.entries[: max_items * 2]:
@@ -146,8 +205,13 @@ def google_news(query: str, group: str, group_type: str,
         source = ""
         if getattr(e, "source", None) is not None:
             source = getattr(e.source, "title", "") or ""
+        title = _clean(getattr(e, "title", ""))
+        if source and title.endswith(f" - {source}"):
+            title = title[: -len(source) - 3].strip()      # Google appends " - Publisher"
+        if is_junk(title, source):
+            continue
         items.append(NewsItem(
-            title=_clean(getattr(e, "title", "")),
+            title=title,
             url=getattr(e, "link", ""),
             source=source or "Google News",
             published=published,
@@ -244,6 +308,8 @@ def rss_feed(url: str, source_name: str, group: str, group_type: str,
         published = _entry_dt(e)
         if not _recent(published, lookback_hours, keep_undated=keep_undated):
             continue
+        if is_junk(_clean(getattr(e, "title", ""))):
+            continue
         items.append(NewsItem(
             title=_clean(getattr(e, "title", "")),
             url=getattr(e, "link", ""),
@@ -278,20 +344,35 @@ def fetch_article_text(url: str, limit: int = 3500):
         return "", url
 
 
+_NAME_STOP = {"inc", "corp", "co", "the", "ltd", "plc", "etf", "fund", "trust", "group", "holdings",
+              "company", "corporation", "limited", "properties", "property", "equity", "international",
+              "industries", "technologies", "financial", "energy", "global", "american", "national",
+              "united", "first", "capital", "partners", "systems", "services", "resources", "shariah",
+              "world", "index", "dow", "jones", "usa", "ftse", "reit", "sharia"}
+
+
+# {TICKER: [alias, ...]} from config (watchlist.stocks[].aliases). When a holding
+# has aliases, matching is STRICT: ticker or alias only — needed where company
+# names are generic ("Pakistan Petroleum", "Hub Power Company").
+ALIASES: dict[str, list[str]] = {}
+
+
 def _relevant(item, name_by_ticker) -> bool:
-    """Keep a stock-tagged item only if it actually references that company —
-    drops generic market-roundup noise Finnhub tags to big tickers."""
+    """Keep a stock-tagged item only if it actually references that company:
+    the ticker as a whole word (upper-case, so 'ELS' never matches 'models'), an
+    alias, or a distinctive word of the company name. Drops roundup noise."""
     if item.group_type != "stock":
         return True
     tk = item.group.upper()
-    hay = f"{item.title} {item.summary}".lower()
-    if tk.lower() in hay:
+    raw = f"{item.title} {item.summary}"
+    if re.search(rf"(?<![A-Za-z]){re.escape(tk)}(?![A-Za-z])", raw):
         return True
+    hay = raw.lower()
+    if ALIASES.get(tk):
+        return any(re.search(rf"\b{re.escape(a.lower())}\b", hay) for a in ALIASES[tk])
     name = (name_by_ticker.get(tk) or "").lower()
-    # match on a distinctive word of the company name (len>3, not "inc/corp/etf")
-    stop = {"inc", "corp", "co", "the", "ltd", "plc", "etf", "fund", "trust", "group", "holdings"}
-    for w in name.replace(",", " ").replace(".", " ").split():
-        if len(w) > 3 and w not in stop and w in hay:
+    for w in re.split(r"[\s,.()&-]+", name):
+        if len(w) > 3 and w not in _NAME_STOP and re.search(rf"\b{re.escape(w)}\b", hay):
             return True
     return False
 
@@ -310,7 +391,7 @@ def finnhub_news(ticker: str, max_items: int, lookback_hours: int) -> list[NewsI
     days = max(1, lookback_hours // 24 + 1)
     items = []
     for n in market_data.company_news(ticker, lookback_days=days, max_items=max_items):
-        if not _recent(n.get("published"), lookback_hours):
+        if not _recent(n.get("published"), lookback_hours) or is_junk(n["title"], n.get("source", "")):
             continue
         items.append(NewsItem(
             title=n["title"], url=n.get("url", ""), source=n.get("source", "Finnhub"),
@@ -373,7 +454,7 @@ def sector_news(sectors: list[str], lookback_days: int = 7,
         if not sec:
             continue
         q = quote_plus(f"{sec} sector when:{lookback_days}d")
-        url = f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
+        url = _gn_url(q)
         feed = _parse_feed(url)
         arts = []
         for e in feed.entries[: max_items * 2]:
@@ -460,8 +541,8 @@ def market_scan(config: dict) -> list[NewsItem]:
 
 
 def collect(config: dict) -> list[NewsItem]:
-    """Returns a deduplicated list of news items. (Prices/financials are handled
-    separately by fundamentals.py.)"""
+    """News on the portfolio HOLDINGS only, deduplicated, newest first.
+    (Prices/financials are handled separately by fundamentals.py.)"""
     src = config.get("sources", {})
     wl = config.get("watchlist", {})
     max_items = int(src.get("max_items_per_query", 8))
@@ -470,7 +551,9 @@ def collect(config: dict) -> list[NewsItem]:
     items: list[NewsItem] = []
 
     stocks = wl.get("stocks", []) or []
-    topics = wl.get("topics", []) or []
+    for s_ in stocks:
+        if s_.get("ticker") and s_.get("aliases"):
+            ALIASES[s_["ticker"].strip().upper()] = list(s_["aliases"])
 
     # Make the degraded path visible: if Finnhub is switched on in config but has
     # no working key, the digest silently falls back to Google News only. Say so.
@@ -497,21 +580,32 @@ def collect(config: dict) -> list[NewsItem]:
         if src.get("marketaux", True):
             items += marketaux_news(ticker, max_items, lookback)
         if src.get("google_news", True):
-            items += google_news(f'{name} stock OR "{ticker}"', ticker, "stock",
+            tmpl = src.get("stock_query", '{name} stock OR "{ticker}"')
+            items += google_news(tmpl.format(name=name, ticker=ticker), ticker, "stock",
                                  max_items, lookback)
         if src.get("yahoo_finance", True):
             items += yahoo_news(ticker, max_items, lookback)
 
-    for t in topics:
-        if src.get("google_news", True):
-            items += google_news(t, t, "topic", max_items, lookback)
+    # Broad business feeds carry real publisher links (full text, not Google
+    # wrappers). Stories in them that name a holding are attributed to it.
+    if src.get("attribute_feeds"):
+        pool = []
+        for fname, url in BROAD_FEEDS:
+            pool += rss_feed(url, fname, "Markets", "topic", 40, lookback)
+        for s_ in stocks:
+            tk = (s_.get("ticker") or "").strip()
+            if not tk:
+                continue
+            nb = {tk.upper(): s_.get("name", "")}
+            for it in pool:
+                probe = NewsItem(title=it.title, url=it.url, source=it.source, published=it.published,
+                                 summary=it.summary, group=tk, group_type="stock")
+                if _relevant(probe, nb):
+                    items.append(probe)
 
-    if src.get("macro_feeds", True):
-        for name, url in MACRO_FEEDS:
-            items += rss_feed(url, name, "Macro", "macro", max_items, lookback)
-
-    for url in (src.get("extra_rss") or []):
-        items += rss_feed(url, "", "Markets", "topic", max_items, lookback)
+    # Topics / macro / broad feeds belong to the daily Market Digest
+    # (collect_market) — the weekly Portfolio Digest is holdings-only, so the two
+    # emails never carry the same sector or macro news.
 
     # Relevance filter: drop generic market-roundup items Finnhub tags onto big
     # tickers (e.g. "3 meme stocks", "Trump made 327 trades") that don't actually
@@ -564,3 +658,80 @@ def collect(config: dict) -> list[NewsItem]:
     deduped.sort(key=lambda it: it.published or _floor, reverse=True)
 
     return deduped
+
+
+# --------------------------------------------------------------------------- #
+#  Daily Market Digest: policy/macro/global/sector themes
+# --------------------------------------------------------------------------- #
+def _dedupe(items: list[NewsItem]) -> list[NewsItem]:
+    best: dict[tuple[str, str], NewsItem] = {}
+    for it in items:
+        if not it.title:
+            continue
+        k = (it.group, it.key())
+        cur = best.get(k)
+        if cur is None or (it.published and (cur.published is None or it.published > cur.published)):
+            best[k] = it
+    _floor = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+    return sorted(best.values(), key=lambda it: (it.published or _floor, it.title), reverse=True)
+
+
+def _theme_hit(text: str, keywords: list[str]) -> bool:
+    t = f" {text.lower()} "
+    for k in keywords:
+        k = k.lower()
+        if k.endswith("*"):
+            if f" {k[:-1]}" in t:
+                return True
+        elif f" {k} " in t or f" {k}," in t or f" {k}." in t or f" {k}'" in t or f" {k}:" in t:
+            return True
+    return False
+
+
+def collect_market(config: dict, scan_items: list[NewsItem] | None = None) -> list[NewsItem]:
+    """News for the Market Digest's themed sections (policy & rates, macro data,
+    global, and the main sectors). Each theme gets its own Google News search;
+    whole-market wire stories (CNBC/MarketWatch/Finnhub…) that match a theme's
+    keywords are folded in too — those carry real publisher links, so the top
+    few per theme are read in FULL for the actual reason behind a move."""
+    src = config.get("sources", {}) or {}
+    lookback = int(src.get("lookback_hours", 24))
+    per = int(src.get("max_items_per_theme", 6))
+    items: list[NewsItem] = []
+    themes = config.get("market_themes") or []
+    scan_items = scan_items or []
+    for th in themes:
+        label = th.get("label") or th.get("key")
+        got = []
+        for q in ([th["query"]] if isinstance(th.get("query"), str) else (th.get("query") or [])):
+            got += google_news(q, label, "theme", per, lookback)
+        kws = th.get("keywords") or []
+        if kws:
+            for it in scan_items:
+                if _theme_hit(f"{it.title} {(it.summary or '')[:300]}", kws):
+                    got.append(NewsItem(title=it.title, url=it.url, source=it.source,
+                                        published=it.published, summary=it.summary,
+                                        group=label, group_type="theme"))
+        items += got
+    if src.get("macro_feeds", True):
+        for name, url in MACRO_FEEDS:
+            items += rss_feed(url, name, "Official releases", "macro", per, lookback)
+    for url in (src.get("extra_rss") or []):
+        items += rss_feed(url, "", "Markets", "topic", per, lookback)
+
+    items = _dedupe(items)
+    # Read the lead stories in full (real publisher links only).
+    if src.get("fetch_full_articles", False):
+        from collections import defaultdict as _dd
+        n = _dd(int)
+        cap = int(src.get("full_articles_per_theme", 2))
+        for it in items:
+            if n[it.group] >= cap or not it.url or "news.google.com" in it.url or len(it.summary or "") > 1500:
+                continue
+            body, final_url = fetch_article_text(it.url)
+            if final_url and "finnhub.io" not in final_url:
+                it.url = final_url
+            if body:
+                it.summary = (it.summary + " " + body).strip()[:3000]
+                n[it.group] += 1
+    return items

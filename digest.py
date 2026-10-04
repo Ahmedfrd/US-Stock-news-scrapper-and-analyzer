@@ -1,885 +1,869 @@
 """
-digest.py — render TWO reports:
-  * build_portfolio(...)  -> your holdings, full depth
-  * build_market(...)     -> general market: flags, sector highlights, stocks to
-                             watch (full analysis incl. technicals + calls),
-                             industries/themes, weekly sector deep-dive, macro
+digest.py — render the two emails.
 
-Shared _stock_card() gives holdings and watch-stocks identical treatment.
-Larger fonts + boxed panels for readability.
+  build_portfolio(...)  WEEKLY Portfolio Digest — your holdings only: the week's
+                        company news, how each name travelled over the week,
+                        ETF component news, and a short bull/bear/judge verdict
+                        that says what changed since last week.
+  build_market(...)     DAILY Market Digest — TL;DR, market levels, policy &
+                        rates, macro prints, global, sectors, at most three
+                        stocks to watch (catalyst + Catalyst Thesis), crypto,
+                        the dated calendar, risks.
+
+Rules the renderer enforces regardless of what the AI returned:
+  * no news → no news block (no "no news this week" placards either);
+  * the two emails share no sections;
+  * bull/bear/judge are pointers, never paragraphs.
+Inline styles and tables only — email clients ignore <style> and <details>.
 """
 
 from __future__ import annotations
 
-import html
 import datetime as dt
-from zoneinfo import ZoneInfo
+import html
 from collections import defaultdict
+from zoneinfo import ZoneInfo
 
-# The runner clock is UTC, but the digest is read in Hong Kong each morning.
-# Stamp the displayed date in HK time so a run near the 23:00-UTC cron (which
-# GitHub can delay across UTC midnight) always shows the correct HK morning date.
 LOCAL_TZ = ZoneInfo("Asia/Hong_Kong")
 
 
 def _now_local():
     return dt.datetime.now(LOCAL_TZ)
 
+
 def _esc(x):
-    """html.escape that tolerates non-strings (the AI occasionally returns a
-    bare number where a text bullet was asked for)."""
     return html.escape(str(x)) if x is not None else ""
 
-_SENT = {"bullish":("#0a7d33","#e6f6ec"),"bearish":("#b3261e","#fdeceb"),
-         "neutral":("#5f6368","#eef0f2"),"mixed":("#8a6d00","#fdf5e0"),
-         "positive":("#0a7d33","#e6f6ec"),"negative":("#b3261e","#fdeceb"),"n/a":("#9aa0a6","#f1f3f4")}
-_IMPACT = {"high":("#b3261e","#fdeceb"),"medium":("#8a6d00","#fdf5e0"),"low":("#5f6368","#eef0f2")}
-_CALL = {"buy":("#0a7d33","#e6f6ec"),"accumulate":("#0a7d33","#eef7f0"),"hold":("#5f6368","#eef0f2"),
-         "reduce":("#b3261e","#fdeef0"),"sell":("#b3261e","#fdeceb")}
 
-def _pill(t,fg,bg,big=False):
-    fs="14px" if big else "13px"; pad="4px 12px" if big else "3px 9px"
-    return (f'<span style="background:{bg};color:{fg};font-size:{fs};font-weight:700;padding:{pad};'
-            f'border-radius:11px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">{_esc(str(t))}</span>')
-def _sent_pill(s): fg,bg=_SENT.get((s or "neutral").lower(),_SENT["neutral"]); return _pill(s or "neutral",fg,bg)
-def _impact_pill(s): fg,bg=_IMPACT.get((s or "low").lower(),_IMPACT["low"]); return _pill(f"impact {s or 'low'}",fg,bg)
-def _call_pill(c): fg,bg=_CALL.get((c or "hold").lower(),_CALL["hold"]); return _pill(c or "hold",fg,bg,big=True)
+# --------------------------------------------------------------------------- #
+#  Small building blocks
+# --------------------------------------------------------------------------- #
+_GREEN, _RED, _AMBER, _GREY, _BLUE = "#0a7d33", "#b3261e", "#8a6d00", "#5f6368", "#1a56c4"
+_SENT = {"bullish": (_GREEN, "#e6f6ec"), "bearish": (_RED, "#fdeceb"), "neutral": (_GREY, "#eef0f2"),
+         "mixed": (_AMBER, "#fdf5e0")}
+_IMPACT = {"high": (_RED, "#fdeceb"), "medium": (_AMBER, "#fdf5e0"), "low": (_GREY, "#eef0f2")}
+_CALL = {"buy": (_GREEN, "#e6f6ec"), "accumulate": (_GREEN, "#eef7f0"), "hold": (_GREY, "#eef0f2"),
+         "watch": (_BLUE, "#eef3fb"), "reduce": (_RED, "#fdeef0"), "sell": (_RED, "#fdeceb"),
+         "avoid": (_RED, "#fdeceb")}
 
-def _pct_span(p):
-    if p is None: return ""
-    c="#0a7d33" if p>=0 else "#b3261e"; a="▲" if p>=0 else "▼"
-    return f'<span style="color:{c};font-weight:600">{a} {p:+.2f}%</span>'
 
-def _num(x,s="",pct=False,nd=2):
-    if x is None: return "n/a"
-    try: return f"{x*100:.1f}%" if pct else f"{x:.{nd}f}{s}"
-    except Exception: return str(x)
+def _pill(t, fg, bg, big=False):
+    fs, pad = ("13px", "3px 10px") if big else ("12px", "2px 8px")
+    return (f'<span style="display:inline-block;background:{bg};color:{fg};font-size:{fs};font-weight:700;'
+            f'padding:{pad};border-radius:10px;text-transform:uppercase;letter-spacing:.3px;'
+            f'white-space:nowrap">{_esc(t)}</span>')
+
+
+def _sent_pill(s):
+    s = (s or "neutral").lower()
+    return _pill(s, *_SENT.get(s, _SENT["neutral"]))
+
+
+def _impact_pill(s):
+    s = (s or "low").lower()
+    return _pill(f"impact {s}", *_IMPACT.get(s, _IMPACT["low"]))
+
+
+def _call_pill(c, big=True):
+    c = (c or "hold").lower()
+    return _pill(c, *_CALL.get(c, _CALL["hold"]), big=big)
+
+
+def _pct(p, nd=2, bold=True):
+    if p is None:
+        return ""
+    c = _GREEN if p >= 0 else _RED
+    return f'<span style="color:{c};{"font-weight:600;" if bold else ""}white-space:nowrap">{p:+.{nd}f}%</span>'
+
+
+def _num(x, s="", pct=False, nd=2):
+    if x is None:
+        return "n/a"
+    try:
+        return f"{x*100:.1f}%" if pct else f"{x:,.{nd}f}{s}"
+    except Exception:  # noqa: BLE001
+        return str(x)
+
+
+def _money(x, cur="$"):
+    if x is None:
+        return "n/a"
+    try:
+        x = float(x)
+        for u, d in (("T", 1e12), ("B", 1e9), ("M", 1e6)):
+            if abs(x) >= d:
+                return f"{cur}{x/d:.2f}{u}"
+        return f"{cur}{x:,.0f}"
+    except Exception:  # noqa: BLE001
+        return "n/a"
+
 
 def _expense(x):
-    """x is already a percent-number (0.03 == 0.03%)."""
     return f"{x:.2f}%" if x is not None else "n/a"
 
-def _money(x):
-    if x is None: return "n/a"
-    try:
-        x=float(x)
-        for u,d in (("T",1e12),("B",1e9),("M",1e6)):
-            if abs(x)>=d: return f"${x/d:.2f}{u}"
-        return f"${x:,.0f}"
-    except Exception: return "n/a"
-
-def _bar(label,val):
-    if val is None: return f'<div style="font-size:14px;color:#9aa0a6;margin:3px 0">{label}: n/a</div>'
-    hue=int(1.2*val)
-    return (f'<div style="display:flex;align-items:center;gap:8px;margin:3px 0">'
-            f'<span style="font-size:14px;color:#5f6368;width:80px">{label}</span>'
-            f'<span style="flex:1;background:#e9ecef;border-radius:5px;height:12px;display:inline-block">'
-            f'<span style="display:block;height:12px;border-radius:5px;width:{val}%;background:hsl({hue},60%,45%)"></span></span>'
-            f'<span style="font-size:14px;color:#3c4043;width:30px;text-align:right;font-weight:600">{val:.0f}</span></div>')
-
-def _grid(rows):
-    cells="".join(f'<tr><td style="padding:3px 12px 3px 0;color:#5f6368;font-size:15px;white-space:nowrap;vertical-align:top">{_esc(l)}</td>'
-                  f'<td style="padding:3px 0;font-size:15px;color:#1a1a1a">{v}</td></tr>' for l,v in rows)
-    return f'<table style="border-collapse:collapse;width:100%">{cells}</table>'
-
-def _box(inner, bg="#fafbfc", border="#e9ecef"):
-    return f'<div style="background:{bg};border:1px solid {border};border-radius:8px;padding:10px 12px;margin:6px 0">{inner}</div>'
-
-def _prose(text, fs="15px", color="#3c4043"):
-    """Render AI free text. The prompts ask for newline-separated '- ' lines, so
-    multi-line text becomes a bullet list; single-line text stays a sentence.
-    Heuristic-path plain sentences pass through unchanged."""
-    if not text: return ""
-    lines=[l.strip().lstrip("-•–·* ").strip() for l in str(text).splitlines() if l.strip()]
-    # drop empty lines and junk bullets that are just a bare number (model slip)
-    lines=[l for l in lines if l and not l.replace(".","").replace("-","").isdigit()]
-    if not lines: return ""
-    if len(lines)==1:
-        return f'<div style="font-size:{fs};color:{color};margin:4px 0">{_esc(lines[0])}</div>'
-    return "".join(f'<div style="font-size:{fs};color:{color};margin:4px 0 4px 4px">• {_esc(l)}</div>'
-                   for l in lines)
-
-def _chip(label,value,tone="neutral"):
-    c={"good":"#0a7d33","bad":"#b3261e","warn":"#8a6d00","neutral":"#3c4043"}.get(tone,"#3c4043")
-    return (f'<span style="display:inline-block;background:#eef1f4;border-radius:7px;padding:4px 9px;'
-            f'margin:3px 5px 3px 0;font-size:14px;color:#5f6368">{_esc(label)} '
-            f'<b style="color:{c}">{value}</b></span>')
-
-def _mentions_total(cw):
-    """Sum of raw mention counts across sources (how many people are talking)."""
-    total = 0
-    for sv in (cw.get("sources") or {}).values():
-        try: total += int(float(sv.get("mentions") or 0))
-        except Exception: pass
-    return total
-
-def _fmt_mentions(m):
-    try: return f"{int(float(m)):,}"
-    except Exception: return str(m) if m is not None else "–"
-
-def _crowd_line(cw):
-    """Compact one-liner: the blended consensus."""
-    if not cw or not cw.get("has_data"):
-        return '<span style="color:#9aa0a6">crowd: no measurable discussion</span>'
-    c = cw.get("consensus", {})
-    bits = [f'crowd {_sent_pill(c.get("label"))}']
-    if c.get("bullish") is not None:
-        bits.append(f'{c["bullish"]}%▲ / {c["bearish"]}%▼ / {c["neutral"]}%–')
-    if c.get("buzz") is not None:
-        bits.append(f'buzz {c["buzz"]}')
-    ment = _mentions_total(cw)
-    if ment:
-        bits.append(f'{ment:,} mentions')
-    src = list(cw.get("sources", {}).keys())
-    if src:
-        bits.append(f'({len(src)} sources)')
-    return " &nbsp;".join(bits)
-
-
-def _stacked(bull, neu, bear, width=150):
-    segs = ""
-    for pct, col in ((bull, "#0a7d33"), (neu, "#c3c7cc"), (bear, "#b3261e")):
-        if pct:
-            segs += f'<span style="display:inline-block;height:15px;width:{pct}%;background:{col}"></span>'
-    if not segs:
-        return '<span style="color:#9aa0a6;font-size:14px">no directional data</span>'
-    return (f'<span style="display:inline-flex;width:{width}px;height:15px;border-radius:4px;'
-            f'overflow:hidden;vertical-align:middle;background:#eef0f2">{segs}</span>')
-
-
-def _crowd_panel(cw):
-    """Per-source bullish/neutral/bearish chart + consensus (Adanos multi-source)."""
-    if not cw or not cw.get("has_data"):
-        return ""
-    c = cw.get("consensus", {})
-    rows = ('<tr style="color:#5f6368;font-size:13px"><td style="padding:2px 8px 2px 0">Source</td>'
-            '<td style="padding:2px 8px">Bull / Neutral / Bear</td>'
-            '<td style="text-align:right;padding:2px 8px">Split</td>'
-            '<td style="text-align:right;padding:2px 8px">Buzz</td>'
-            '<td style="text-align:right;padding:2px 8px">Mentions</td>'
-            '<td style="text-align:right;padding:2px 0">Trend</td></tr>')
-    def row(name, sv, bold=False):
-        b, n, br = sv.get("bullish"), sv.get("neutral"), sv.get("bearish")
-        split = (f'<span style="color:#0a7d33">{b}%</span> / {n}% / <span style="color:#b3261e">{br}%</span>'
-                 if b is not None else (f'score {sv.get("score")}' if sv.get("score") is not None else "n/a"))
-        w = "font-weight:700;" if bold else ""
-        return (f'<tr><td style="padding:3px 8px 3px 0;font-size:14px;{w}">{_esc(name)}</td>'
-                f'<td style="padding:3px 8px">{_stacked(b, n, br)}</td>'
-                f'<td style="text-align:right;padding:3px 8px;font-size:14px">{split}</td>'
-                f'<td style="text-align:right;padding:3px 8px;font-size:14px">{sv.get("buzz") if sv.get("buzz") is not None else "–"}</td>'
-                f'<td style="text-align:right;padding:3px 8px;font-size:14px;{w}">{_fmt_mentions(sv.get("mentions"))}</td>'
-                f'<td style="text-align:right;padding:3px 0;font-size:14px;color:#5f6368">{_esc(str(sv.get("trend") or "–"))}</td></tr>')
-    for name, sv in cw.get("sources", {}).items():
-        rows += row(name, sv)
-    if c:
-        total = _mentions_total(cw)
-        rows += row("Consensus", {**c, "mentions": total or None}, bold=True)
-    return _box('<div style="font-size:15px;font-weight:700;margin-bottom:5px">👥 Crowd sentiment '
-                '<span style="font-weight:400;color:#9aa0a6">— Adanos: Reddit · X · News · Polymarket</span></div>'
-                f'<table style="border-collapse:collapse;width:100%">{rows}</table>', bg="#fbfbfd")
-
-def _tech_panel(t):
-    if not t or getattr(t,"error",None): return '<div style="font-size:15px;color:#9aa0a6">Technicals: n/a</div>'
-    rsi_tone="bad" if (t.rsi or 50)>=70 else "good" if (t.rsi or 50)<=30 else "neutral"
-    macd_tone="good" if (t.macd_hist or 0)>0 else "bad" if (t.macd_hist or 0)<0 else "neutral"
-    vol_tone="good" if (t.vol_ratio or 0)>=1.2 else "neutral"
-    trend_tone={"up":"good","down":"bad"}.get(t.trend,"neutral")
-    a50="above" if (t.price and t.sma50 and t.price>t.sma50) else "below" if t.sma50 else "n/a"
-    a200="above" if (t.price and t.sma200 and t.price>t.sma200) else "below" if t.sma200 else "n/a"
-    chips=[_chip("RSI",t.rsi if t.rsi is not None else "n/a",rsi_tone),
-           _chip("MACD hist",t.macd_hist if t.macd_hist is not None else "n/a",macd_tone),
-           _chip("Trend",t.trend or "n/a",trend_tone),
-           _chip("vs SMA50",a50,"good" if a50=="above" else "bad" if a50=="below" else "neutral"),
-           _chip("vs SMA200",a200,"good" if a200=="above" else "bad" if a200=="below" else "neutral"),
-           _chip("ATR",f"{t.atr} ({t.atr_pct}%)" if t.atr is not None else "n/a"),
-           _chip("Volume",f"{t.vol_ratio}x" if t.vol_ratio is not None else "n/a",vol_tone),
-           _chip("Support",t.support if t.support is not None else "n/a"),
-           _chip("Resistance",t.resistance if t.resistance is not None else "n/a")]
-    reasons="".join(f'<div style="font-size:14px;color:#5f6368;margin:2px 0">• {_esc(r)}</div>' for r in (t.reasons or [])[:5])
-    return (f'<div style="margin:2px 0 6px">{"".join(chips)}</div>'
-            f'<div style="font-size:15px;margin-bottom:4px">Rule-based signal: {_sent_pill(t.bias)} '
-            f'&nbsp;<b>{_esc(t.signal.upper())}</b> <span style="color:#9aa0a6">(deterministic reference)</span></div>{reasons}')
-
-def _links_block(items,label="Sources & full articles"):
-    if not items: return ""
-    seen=set(); uniq=[]
-    for it in items:  # the same headline can arrive for several holdings/queries
-        k=(it.title or "").strip().lower()
-        if not k or k in seen: continue
-        seen.add(k); uniq.append(it)
-    if not uniq: return ""
-    rows="".join(f'<div style="font-size:15px;margin:4px 0"><a href="{_esc(it.url)}" '
-                 f'style="color:#1a1a1a;text-decoration:none">• {_esc(it.title)}</a> '
-                 f'<span style="color:#9aa0a6">— {_esc(it.source)}</span></div>' for it in uniq)
-    return (f'<details style="margin-top:8px"><summary style="cursor:pointer;color:#3367d6;font-size:15px;'
-            f'font-weight:600;user-select:none">▾ {label} ({len(uniq)}) — click to expand</summary>'
-            f'<div style="margin-top:6px;padding-left:4px">{rows}</div></details>')
-
-def _links_list(items,label="Sources & full articles",limit=8,prefix_group=False):
-    """VISIBLE (non-collapsible) article list — email clients render <details>
-    unreliably, which hid the news. Used inside stock/ETF cards."""
-    if not items: return ""
-    seen=set(); uniq=[]
-    for it in items:
-        k=(it.title or "").strip().lower()
-        if not k or k in seen: continue
-        seen.add(k); uniq.append(it)
-    uniq=uniq[:limit]
-    if not uniq: return ""
-    rows=""
-    for it in uniq:
-        pre=f'<b>{_esc(it.group)}</b> · ' if (prefix_group and getattr(it,"group","")) else ""
-        rows+=(f'<div style="font-size:15px;margin:5px 0">• {pre}<a href="{_esc(it.url)}" '
-               f'style="color:#1a40b0;text-decoration:underline">{_esc(it.title)}</a> '
-               f'<span style="color:#9aa0a6">— {_esc(it.source)}</span></div>')
-    return (f'<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eef0f2">'
-            f'<div style="font-size:15px;font-weight:700;margin-bottom:2px">📰 {label} ({len(uniq)})</div>{rows}</div>')
 
 def _pts(lst):
-    """Clean an AI bullet array: drop empties and bare-number junk items.
-    Defensively handles a model returning a bare string instead of a JSON
-    array (schema violation) — split it into lines rather than iterating it
-    character-by-character, which silently produced one-letter 'bullets'."""
+    """AI bullets → clean list (accepts a newline string or a list)."""
     if isinstance(lst, str):
-        lst = [l for l in lst.splitlines() if l.strip()] or ([lst] if lst.strip() else [])
-    out=[]
+        lst = lst.splitlines()
+    out = []
     for p in (lst or []):
-        t=str(p).strip().lstrip("-•–·* ").strip()
-        if t and not t.replace(".","").replace("-","").isdigit():
+        t = str(p).strip().lstrip("-•–·* ").strip()
+        if t and not t.replace(".", "").replace("-", "").isdigit():
             out.append(t)
     return out
 
-def _banner(status):
-    if status.get("ok"):
-        return (f'<div style="background:#e6f6ec;border-left:4px solid #0a7d33;padding:9px 13px;'
-                f'border-radius:6px;margin-bottom:16px;font-size:15px;color:#0a5227">'
-                f'✅ Analysis by <b>{_esc(status.get("engine",""))}</b></div>')
-    reason=_esc(status.get("reason","") or "no AI provider available")
-    return (f'<div style="background:#fdf5e0;border-left:4px solid #8a6d00;padding:9px 13px;border-radius:6px;'
-            f'margin-bottom:16px;font-size:15px;color:#6b5300">⚠️ AI unavailable — used the free '
-            f'<b>heuristic</b>.<br><span>Reason: {reason}</span></div>')
+
+def _bullets(lst, fs="15px", color="#3c4043", limit=8):
+    pts = _pts(lst)[:limit]
+    if not pts:
+        return ""
+    return "".join(f'<div style="font-size:{fs};color:{color};margin:4px 0 4px 2px;padding-left:14px;'
+                   f'text-indent:-12px">•&nbsp;{_esc(p)}</div>' for p in pts)
+
+
+def _box(inner, bg="#fafbfc", border="#e6e9ee", pad="10px 13px"):
+    return (f'<div style="background:{bg};border:1px solid {border};border-radius:8px;padding:{pad};'
+            f'margin:8px 0">{inner}</div>')
+
+
+def _label(t, color=_GREY):
+    return (f'<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;'
+            f'color:{color};margin:0 0 4px">{_esc(t)}</div>')
+
 
 def _h2(title, sub=""):
-    subhtml=f' <span style="font-size:15px;font-weight:400;color:#9aa0a6">— {_esc(sub)}</span>' if sub else ""
-    return (f'<h2 style="font-size:19px;margin:26px 0 12px;padding-bottom:6px;border-bottom:2px solid #eef0f2">'
-            f'{_esc(title)}{subhtml}</h2>')
+    s = f'<div style="font-size:13px;font-weight:400;color:#80868b;margin-top:2px">{_esc(sub)}</div>' if sub else ""
+    return (f'<div style="margin:26px 0 10px;padding-bottom:6px;border-bottom:2px solid #eef0f2">'
+            f'<div style="font-size:19px;font-weight:700;color:#1a1a1a">{_esc(title)}</div>{s}</div>')
 
-def _flags_row(flags):
-    if not flags: return ""
-    cells=""
-    for fl in flags:
-        pct=fl.get("pct"); col="#0a7d33" if (pct or 0)>=0 else "#b3261e"; arr="▲" if (pct or 0)>=0 else "▼"
-        pcts=f'<span style="color:{col};font-weight:600">{arr} {pct:+.2f}%</span>' if pct is not None else ""
-        cells+=(f'<td style="padding:8px 12px;border:1px solid #eef0f2;text-align:center">'
-                f'<div style="font-size:14px;color:#5f6368">{_esc(fl["name"])}</div>'
-                f'<div style="font-size:16px;font-weight:700">{fl.get("price")}</div>'
-                f'<div style="font-size:14px">{pcts}</div></td>')
-    return (f'<div style="margin-bottom:18px">{_h2("Global market flags")}'
-            f'<table style="border-collapse:collapse;width:100%"><tr>{cells}</tr></table></div>')
 
-def _risks_and_events(macro):
-    """Report-level 'Risks' + 'Key Upcoming Events' — bulleted, at the end of
-    the report, one line per item (not the old inline 'Watch: a · b · c')."""
-    B=[]
-    risks=_pts(macro.get("risks"))
-    if risks:
-        B.append(_h2("Risks"))
-        for r in risks[:6]:
-            B.append(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(r)}</div>')
-    watch=_pts(macro.get("watch"))
-    if watch:
-        B.append(_h2("Key Upcoming Events"))
-        for w in watch[:8]:
-            B.append(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(w)}</div>')
-    return "".join(B)
+def _chip(label, value, tone="neutral"):
+    c = {"good": _GREEN, "bad": _RED, "warn": _AMBER}.get(tone, "#3c4043")
+    return (f'<span style="display:inline-block;background:#f1f3f5;border-radius:6px;padding:3px 8px;'
+            f'margin:2px 4px 2px 0;font-size:13px;color:{_GREY};white-space:nowrap">{_esc(label)} '
+            f'<b style="color:{c}">{_esc(value)}</b></span>')
 
-def _legend():
-    return ("""<div style="margin-top:24px;background:#fafafa;border:1px solid #eee;border-radius:8px;padding:14px 16px;font-size:15px;color:#3c4043">
-      <div style="font-weight:700;margin-bottom:6px;font-size:16px">How to read this report</div>
-      <div style="margin-bottom:4px"><b>Factor scores (0–100), higher = stronger:</b>
-        <span style="color:#b3261e">0–33 weak</span> · <span style="color:#8a6d00">34–66 average</span> · <span style="color:#0a7d33">67–100 strong</span></div>
-      <div>• <b>Value</b> cheapness (P/E, P/S, PEG) · <b>Growth</b> revenue/earnings · <b>Profit</b> margins/ROE · <b>Momentum</b> trend & 52-wk position · <b>Health</b> balance sheet · <b>Composite</b> average.</div>
-      <div style="margin-top:4px">• <b>News tone</b> headline wording (−1..+1) · <b>Crowd</b> Adanos multi-source (Reddit · X · News · Polymarket); <b>Mentions</b> = how many people are actually talking (judge whether the %s represent a big population) · <b>Impact</b> materiality of today's news.</div>
-      <div style="margin-top:4px"><b>Technicals:</b> RSI (&gt;70 overbought, &lt;30 oversold) · MACD (momentum) · SMA/EMA (trend) · ATR (volatility) · Volume (confirmation) · support/resistance. <b>Rule-based signal</b> = deterministic reference. <b>Technical read</b> = the AI's call from the technicals. <b>Research verdict</b> = the bull/bear/judge debate's synthesis.</div>
-      <div style="margin-top:4px;color:#b3261e"><b>Not investment advice.</b> Signals/calls describe the current setup, not a recommendation or forecast. Do your own research.</div></div>""")
 
-def _footer():
-    return ('<div style="margin-top:14px;font-size:14px;color:#9aa0a6">Sources: Yahoo Finance, Finnhub, '
-            'Google News RSS, SEC EDGAR, Adanos (Reddit), central-bank feeds. Rule-based/AI context, not predictions. '
-            'Informational only, not investment advice.</div></div></body></html>')
+def _links(items, label="Sources", limit=6):
+    """Visible article list (email clients render <details> unreliably)."""
+    seen, uniq = set(), []
+    for it in items or []:
+        k = (it.title or "").strip().lower()
+        if k and k not in seen and it.url:
+            seen.add(k)
+            uniq.append(it)
+    uniq = uniq[:limit]
+    if not uniq:
+        return ""
+    rows = "".join(
+        f'<div style="font-size:14px;margin:3px 0;padding-left:14px;text-indent:-12px">•&nbsp;'
+        f'<a href="{_esc(it.url)}" style="color:{_BLUE};text-decoration:underline">{_esc(it.title)}</a>'
+        f' <span style="color:#9aa0a6">— {_esc(it.source)}'
+        + (f', {it.published.astimezone(LOCAL_TZ):%d %b}' if getattr(it, "published", None) else "")
+        + '</span></div>' for it in uniq)
+    return (f'<div style="margin-top:8px;padding-top:6px;border-top:1px solid #eef0f2">'
+            f'<div style="font-size:12px;font-weight:700;color:#80868b;text-transform:uppercase;'
+            f'letter-spacing:.4px;margin-bottom:2px">{_esc(label)}</div>{rows}</div>')
 
-def _wrap(title, dated, banner_html, body):
+
+def _banner(status):
+    if status.get("ok"):
+        return (f'<div style="font-size:13px;color:#80868b;margin-bottom:14px">Analysis by '
+                f'{_esc(status.get("engine", ""))}</div>')
+    reason = _esc(status.get("reason", "") or "no AI provider available")
+    return (f'<div style="background:#fdf5e0;border-left:4px solid {_AMBER};padding:8px 12px;border-radius:6px;'
+            f'margin-bottom:14px;font-size:14px;color:#6b5300">⚠️ AI unavailable — this email uses the '
+            f'rule-based fallback (headlines and computed figures only).<br><span style="font-size:12px">'
+            f'{reason}</span></div>')
+
+
+def _wrap(title, dated, sub, banner_html, body, footer):
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1"></head>'
-            '<body style="margin:0;background:#ffffff">'
-            f'<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
-            f'max-width:740px;margin:0 auto;color:#1a1a1a;line-height:1.55;font-size:16px">'
-            f'<h1 style="font-size:26px;margin:0 0 2px">{_esc(title)}</h1>'
-            f'<div style="color:#5f6368;font-size:15px;margin-bottom:12px">{dated}</div>'
-            f'{banner_html}{body}')
+            '<body style="margin:0;padding:0;background:#ffffff">'
+            '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
+            'max-width:720px;margin:0 auto;padding:16px 14px;color:#1a1a1a;line-height:1.5;font-size:15px">'
+            f'<div style="font-size:24px;font-weight:800;margin:0">{_esc(title)}</div>'
+            f'<div style="color:{_GREY};font-size:14px;margin:2px 0 0">{_esc(dated)}</div>'
+            + (f'<div style="color:#9aa0a6;font-size:13px;margin:0 0 10px">{_esc(sub)}</div>' if sub else
+               '<div style="height:10px"></div>')
+            + banner_html + body + footer + '</div></body></html>')
+
+
+def _footer(sources, extra=""):
+    return (f'<div style="margin-top:22px;padding-top:10px;border-top:1px solid #eef0f2;font-size:12px;'
+            f'color:#9aa0a6">{extra}Sources: {_esc(sources)}. AI + rule-based context, not predictions. '
+            f'Informational only — <b>not investment advice</b>.</div>')
+
+
+def _grid(rows):
+    cells = "".join(f'<tr><td style="padding:2px 10px 2px 0;color:{_GREY};font-size:14px;white-space:nowrap;'
+                    f'vertical-align:top">{_esc(l)}</td><td style="padding:2px 0;font-size:14px">{v}</td></tr>'
+                    for l, v in rows if v not in (None, "", "n/a"))
+    return f'<table style="border-collapse:collapse;width:100%">{cells}</table>' if cells else ""
 
 
 # --------------------------------------------------------------------------- #
-#  Shared full stock/ETF card
+#  Technicals, fundamentals, verdict
 # --------------------------------------------------------------------------- #
-def _component_news(tk, etf_an, extras):
-    """One block PER COMPONENT COMPANY of a fund: its weight and today's move,
-    the news on that company specifically, what it means for the fund, and its
-    own article links. A fund is a basket of companies — the reader wants those
-    companies covered individually, not blended into a single fund paragraph."""
-    hn=(extras.get("etf_holding_news") or {}).get(tk,{}) or {}
-    ai={}
-    for e in (etf_an.get("holdings_news") or []):
-        if isinstance(e,dict) and e.get("symbol"):
-            ai[str(e["symbol"]).strip().upper()]=e
-    prof=(extras.get("etf") or {}).get(tk)
-    holds=list(prof.holdings) if prof else []
-    order=[h.symbol for h in holds]
-    for sym in list(hn)+list(ai):
-        if sym not in order: order.append(sym)
-    by_sym={h.symbol:h for h in holds}
+def _crowd_line(cw):
+    """One line of crowd sentiment, with how many people are actually talking."""
+    c = cw.get("consensus", {}) or {}
+    bits = [f'Crowd {_sent_pill(c.get("label"))}']
+    if c.get("bullish") is not None:
+        bits.append(f'{c["bullish"]}% bullish / {c["bearish"]}% bearish')
+    total = 0
+    for sv in (cw.get("sources") or {}).values():
+        try:
+            total += int(float(sv.get("mentions") or 0))
+        except Exception:  # noqa: BLE001
+            pass
+    if total:
+        bits.append(f"{total:,} mentions")
+    if cw.get("sources"):
+        bits.append(", ".join(cw["sources"].keys()))
+    return " · ".join(bits)
 
-    blocks=[]
-    for sym in order:
-        u=str(sym).strip().upper()
-        a=ai.get(u) or {}
-        arts=hn.get(sym) or hn.get(u) or []
-        if not a and not arts:
+
+def _tech_line(t, tr=None):
+    """One compact row of indicator chips + the AI's one-line read."""
+    if not t or getattr(t, "error", None):
+        return ""
+    a50 = "above" if (t.price and t.sma50 and t.price > t.sma50) else "below" if t.sma50 else None
+    a200 = "above" if (t.price and t.sma200 and t.price > t.sma200) else "below" if t.sma200 else None
+    rsi_tone = "bad" if (t.rsi or 50) >= 70 else "good" if (t.rsi or 50) <= 30 else "neutral"
+    chips = [_chip("RSI", t.rsi, rsi_tone) if t.rsi is not None else "",
+             _chip("Trend", t.trend, {"up": "good", "down": "bad"}.get(t.trend, "neutral")) if t.trend else "",
+             _chip("50d", a50, "good" if a50 == "above" else "bad") if a50 else "",
+             _chip("200d", a200, "good" if a200 == "above" else "bad") if a200 else "",
+             _chip("MACD", "+" if (t.macd_hist or 0) > 0 else "−", "good" if (t.macd_hist or 0) > 0 else "bad")
+             if t.macd_hist is not None else "",
+             _chip("ATR", f"{t.atr_pct}%") if t.atr_pct is not None else "",
+             _chip("Support", t.support) if t.support is not None else "",
+             _chip("Resistance", t.resistance) if t.resistance is not None else ""]
+    inner = _label("Technicals") + "".join(chips)
+    tr = tr or {}
+    rat = _pts(tr.get("rationale"))
+    if tr.get("call"):
+        inner += (f'<div style="font-size:14px;margin-top:5px">{_call_pill(tr["call"], big=False)} '
+                  f'<span style="color:#3c4043">{_esc(rat[0]) if rat else ""}</span></div>')
+    return _box(inner)
+
+
+def _verdict(s, is_pick=False):
+    """Compact bull / bear / judge — pointers only."""
+    d = s.get("debate") or {}
+    v = d.get("verdict") or {}
+    bull, bear = _pts(d.get("bull"))[:3], _pts(d.get("bear"))[:3]
+    if not (v.get("call") or bull or bear):
+        return ""
+    call = (v.get("call") or "").lower()
+    shown = "watch" if (is_pick and call == "hold") else call
+    conv = (v.get("conviction") or "").lower()
+    head = _label("Verdict" + (" — single fund read" if d.get("mode") == "single" else " — bull · bear · judge"))
+    if call:
+        head += (f'<div style="margin:2px 0 4px">{_call_pill(shown)} '
+                 f'<span style="font-size:13px;font-weight:700;color:'
+                 f'{ {"high": _GREEN, "medium": _AMBER}.get(conv, "#9aa0a6") }">{_esc(conv.upper())} conviction</span></div>')
+    if v.get("withheld_call"):
+        head += (f'<div style="font-size:13px;color:{_AMBER}">Directional call ({_esc(v["withheld_call"])}) withheld — '
+                 f'the judge could not support it with a complete catalyst thesis.</div>')
+    prior = s.get("prior_verdict")
+    chg = v.get("changed_since_last_week")
+    if prior or chg:
+        was = (f'Last week: <b>{_esc(str(prior.get("call", "")).upper())}</b> at {_esc(prior.get("price"))}'
+               f' ({_esc(prior.get("date"))})' if prior else "")
+        head += (f'<div style="font-size:14px;color:#3c4043;margin:3px 0">🔁 {was}'
+                 + (" — " if was and chg else "") + (f'{_esc(chg)}' if chg else "") + '</div>')
+    head += _bullets(v.get("pointers"), fs="14px", color="#1a1a1a", limit=3)
+    cols = ""
+    if bull or bear:
+        def col(title, pts, fg, bg):
+            items = "".join(f'<div style="margin:3px 0;padding-left:12px;text-indent:-10px">•&nbsp;{_esc(p)}</div>'
+                            for p in pts) or '<div style="color:#9aa0a6">—</div>'
+            return (f'<td style="width:50%;vertical-align:top;background:{bg};border-radius:6px;padding:7px 9px;'
+                    f'font-size:13px;color:#1a1a1a"><div style="font-weight:700;color:{fg};margin-bottom:2px">'
+                    f'{title}</div>{items}</td>')
+        cols = ('<table style="width:100%;border-collapse:separate;border-spacing:0 0;margin-top:6px"><tr>'
+                + col("🐂 Bull", bull, _GREEN, "#f0f8f2") + '<td style="width:6px"></td>'
+                + col("🐻 Bear", bear, _RED, "#fdf2f1") + '</tr></table>')
+    tail = ""
+    if v.get("key_risk"):
+        tail += f'<div style="font-size:13px;margin-top:6px"><b>Key risk:</b> {_esc(_pts(v["key_risk"])[0] if _pts(v["key_risk"]) else "")}</div>'
+    if v.get("what_would_change_it"):
+        w = _pts(v["what_would_change_it"])
+        tail += f'<div style="font-size:13px;color:{_GREY}"><b>Would change the call:</b> {_esc(w[0] if w else "")}</div>'
+    return _box(head + cols + tail, bg="#f7f9fc", border="#dfe5ee")
+
+
+# --------------------------------------------------------------------------- #
+#  WEEKLY PORTFOLIO
+# --------------------------------------------------------------------------- #
+def _progression_table(p, cur=""):
+    days = (p or {}).get("days") or []
+    if not days:
+        return ""
+    head = "".join(f'<td style="padding:3px 6px;font-size:12px;color:#80868b;text-align:center;white-space:nowrap">'
+                   f'{_esc(d["date"][:6])}</td>' for d in days)
+    vals = "".join(f'<td style="padding:3px 6px;font-size:13px;text-align:center">{_pct(d.get("pct"), bold=False)}</td>'
+                   for d in days)
+    closes = "".join(f'<td style="padding:0 6px 3px;font-size:12px;color:{_GREY};text-align:center">{d["close"]:,}</td>'
+                     for d in days)
+    extra = []
+    if p.get("vs_bench_pts") is not None:
+        extra.append(f'vs benchmark <b>{p["vs_bench_pts"]:+.2f} pts</b>')
+    if p.get("weeks"):
+        extra.append("last 4 weeks " + " → ".join(_pct(w, bold=False) for w in p["weeks"] if w is not None))
+    if p.get("rsi_now") is not None:
+        extra.append(f'RSI {p["rsi_week_ago"]} → {p["rsi_now"]}')
+    if p.get("vol_week_vs_avg") is not None:
+        extra.append(f'volume {p["vol_week_vs_avg"]}× normal')
+    return (f'<table style="border-collapse:collapse;margin:2px 0">'
+            f'<tr>{head}</tr><tr>{vals}</tr><tr>{closes}</tr></table>'
+            + (f'<div style="font-size:13px;color:{_GREY};margin-top:3px">{" · ".join(extra)}</div>' if extra else ""))
+
+
+def _component_block(tk, s, extras):
+    """Per-component news for a fund — only components that HAD news."""
+    hn = (extras.get("etf_holding_news") or {}).get(tk, {}) or {}
+    ai = {str(e.get("symbol", "")).upper(): e for e in ((s.get("etf") or {}).get("holdings_news") or [])
+          if isinstance(e, dict)}
+    prof = (extras.get("etf") or {}).get(tk)
+    by_sym = {h.symbol.upper(): h for h in (prof.holdings if prof else [])}
+    blocks = []
+    for sym, arts in hn.items():
+        if not arts:
             continue
-        h=by_sym.get(sym)
-        name=a.get("company") or (h.name if h and h.name else "")
-        head=(f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
-              f'<span style="font-weight:700;font-size:16px">{_esc(sym)}'
-              + (f' <span style="color:#9aa0a6;font-weight:400;font-size:14px">{_esc(name[:40])}</span>' if name else "")
-              + '</span>'+(_sent_pill(a.get("call")) if a.get("call") else "")+'</div>')
-        stats=[]
+        u = sym.upper()
+        a, h = ai.get(u, {}), by_sym.get(u)
+        stats = []
         if h is not None:
-            if h.weight is not None: stats.append(f'{(h.weight*100):.1f}% of fund')
-            if h.ret_1d is not None: stats.append(f'1d {_pct_span(h.ret_1d)}')
-            if h.contribution is not None: stats.append(f'{h.contribution:+.3f} pts of the fund move')
-        if stats:
-            head+=f'<div style="font-size:14px;color:#5f6368;margin:2px 0">{" · ".join(stats)}</div>'
-        body=""
-        if a.get("news"): body+=_prose(a["news"])
+            if h.weight is not None:
+                stats.append(f"{h.weight*100:.1f}% of fund")
+            if h.ret_1w is not None:
+                stats.append(f"week {_pct(h.ret_1w, bold=False)}")
+            if h.contribution_1w is not None:
+                stats.append(f"{h.contribution_1w:+.2f} pts to the fund")
+        name = a.get("company") or (h.name if h else "")
+        if (name or "").strip().upper() == u:
+            name = ""
+        body = _bullets(a.get("news"), fs="14px") if a.get("news") else ""
         if a.get("impact_on_fund"):
-            body+=f'<div style="font-size:15px;color:#3c4043;margin-top:4px"><b>For the fund:</b> {_esc(a["impact_on_fund"])}</div>'
-        if not body and arts:
-            body='<div style="font-size:14px;color:#9aa0a6;margin-top:2px">No AI write-up for this holding this run — headlines below.</div>'
-        links=_links_list(arts,label=f"{sym} news",limit=4) if arts else ""
-        blocks.append(_box(head+body+links,bg="#ffffff",border="#e3e8ef"))
-
+            body += f'<div style="font-size:13px;color:{_GREY};margin-top:2px"><b>For the fund:</b> {_esc(a["impact_on_fund"])}</div>'
+        blocks.append(
+            f'<div style="border-top:1px solid #eef0f2;padding:6px 0">'
+            f'<div style="font-size:14px"><b>{_esc(sym)}</b> <span style="color:#80868b">{_esc((name or "")[:40])}</span>'
+            + (f' &nbsp;{_sent_pill(a.get("call"))}' if a.get("call") else "")
+            + (f'<span style="font-size:13px;color:{_GREY}"> · {" · ".join(stats)}</span>' if stats else "")
+            + f'</div>{body}{_links(arts, label="Articles", limit=2)}</div>')
     if not blocks:
         return ""
-    return ('<div style="margin:10px 0 4px"><div style="font-size:15px;font-weight:700;color:#3367d6;'
-            'text-transform:uppercase;letter-spacing:.4px">Component companies — news by company</div>'
-            '<div style="font-size:14px;color:#9aa0a6;margin-bottom:6px">'
-            "what happened at each major company inside the fund, and what it did to the fund</div>"
-            +"".join(blocks)+'</div>')
+    return _box(_label("Inside the fund — component company news this week", _BLUE) + "".join(blocks),
+                bg="#ffffff", border="#dfe5ee")
 
 
-def _stock_card(tk, s, funds, extras, by_group, watch_reason=None):
-    f=funds.get(tk); e=(extras.get("earnings") or {}).get(tk) or {}
-    sg=(extras.get("sentiment") or {}).get(tk,{}); cw=(extras.get("crowd") or {}).get(tk,{})
-    fils=extras.get("filings") or {}; is_etf=bool(f and f.is_etf)
-    price=_num(f.price) if f else "n/a"; chg=_pct_span(f.change_1d) if f else ""
-    cur=(getattr(f,"currency","") or "") if f else ""
-    if cur and cur!="USD" and price!="n/a":
-        price+=f' <span style="color:#8a6d00;font-size:13px;font-weight:700">{_esc(cur)}</span>'
-    H=[]
-    H.append(f'<div style="border:1px solid #e5e7eb;border-radius:10px;padding:16px 18px;margin-bottom:16px;background:#fff">')
-    H.append(f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">'
-             f'<span style="font-size:20px;font-weight:800">{_esc(tk)}'
-             f'<span style="font-weight:400;color:#5f6368;font-size:16px"> {_esc(f.name if f else "")}</span></span>'
-             f'<span>{_impact_pill(s.get("impact"))}&nbsp;{_sent_pill(s.get("sentiment"))}</span></div>')
-    if watch_reason:
-        H.append(f'<div style="font-size:14px;color:#8a6d00;margin-top:2px">Flagged because: {_esc(watch_reason)}</div>')
-    sh = (extras.get("shariah") or {}).get(tk)
-    if sh:
-        col = {"pass":("#0a7d33","#e6f6ec"),"review":("#8a6d00","#fdf5e0"),"fail":("#b3261e","#fdeceb")}.get(sh["status"],("#5f6368","#eef0f2"))
-        rlab = {"pass":"✓ Shariah: passed (auto-screen)","review":"⚠ Shariah: needs review","fail":"✗ Shariah: not compliant"}.get(sh["status"],"Shariah: n/a")
-        ratios = ""
-        if sh.get("ratios"):
-            ratios = " · " + ", ".join(f"{k} {v}%" for k, v in sh["ratios"].items())
-        H.append(f'<div style="margin-top:4px">{_pill(rlab, *col)}'
-                 f'<span style="font-size:13px;color:#9aa0a6">{ratios}</span></div>')
-    H.append(f'<div style="font-size:16px;color:#3c4043;margin:6px 0 4px">{price} &nbsp; {chg}</div>')
-    if sg.get("n"):
-        tone=f'news tone {sg.get("score","n/a")} ({sg.get("label","n/a")})'
-        if sg.get("basis")=="holdings":
-            tone+=' <span style="color:#9aa0a6;font-size:13px">(from holdings news)</span>'
-    else:
-        tone='<span style="color:#9aa0a6">news tone: no direct news this run</span>'
-    H.append(f'<div style="font-size:15px;color:#3c4043;margin-bottom:8px">'
-             f'{tone} &nbsp;·&nbsp; {_crowd_line(cw)}</div>')
-
-    # badges
-    badges=""
-    if e.get("upcoming"):
-        u=e["upcoming"]; d=u.get("days_away")
-        col=("#b3261e","#fdeceb") if (d is not None and d<=7) else ("#8a6d00","#fdf5e0")
-        badges+=_pill(f"earnings in {d}d",*col)+"&nbsp;"
+def _holding_card(tk, s, funds, extras, by_group):
+    f = funds.get(tk)
+    is_etf = bool(f and f.is_etf)
+    prog = (extras.get("progression") or {}).get(tk) or {}
+    arts = by_group.get(tk, [])
+    has_news = bool(arts) or any((extras.get("etf_holding_news") or {}).get(tk, {}).values())
+    H = ['<div style="border:1px solid #e3e6ea;border-radius:10px;padding:14px 15px;margin:0 0 16px;background:#fff">']
+    price = f"{_num(f.price)}" if f and f.price is not None else ""
+    week = _pct(prog.get("week_pct")) if prog.get("week_pct") is not None else ""
+    pills = (_impact_pill(s.get("impact")) + " " + _sent_pill(s.get("sentiment"))) if has_news else ""
+    H.append(f'<table style="width:100%;border-collapse:collapse"><tr>'
+             f'<td style="vertical-align:top"><span style="font-size:19px;font-weight:800">{_esc(tk)}</span> '
+             f'<span style="color:{_GREY};font-size:14px">{_esc(f.name if f else "")}</span>'
+             f'<div style="font-size:15px;margin-top:1px">{price}'
+             + (f' &nbsp;· week {week}' if week else "") + '</div></td>'
+             f'<td style="text-align:right;vertical-align:top;white-space:nowrap">{pills}</td></tr></table>')
+    e = (extras.get("earnings") or {}).get(tk) or {}
+    badges = []
     if e.get("recent"):
-        rc=e["recent"]; sp=rc.get("eps_surprise_pct"); beat=sp is not None and sp>0
-        col=("#0a7d33","#e6f6ec") if beat else ("#b3261e","#fdeceb")
-        lab=f"reported {rc.get('days_ago')}d ago: EPS {'beat' if beat else 'miss'}"+(f" {sp:+.1f}%" if sp is not None else "")
-        badges+=_pill(lab,*col)+"&nbsp;"
-    if is_etf: badges+=_pill("ETF / fund","#3367d6","#eef3fb")+"&nbsp;"
-    if badges: H.append(f'<div style="margin-bottom:8px">{badges}</div>')
-
-    # ---- 1) NEWS — what happened and what it means (the point of the report) ----
-    H.append(f'<div style="margin-bottom:6px">{_prose(s.get("summary",""),fs="16px",color="#1a1a1a")}</div>')
-    if s.get("news_impact"):
-        H.append(_box(f'<b style="color:#3367d6">News impact on the company:</b>{_prose(s["news_impact"])}',bg="#eef3fb",border="#d5e2f7"))
-    if s.get("divergence"):
-        H.append(_box(f'⚡ <b>Divergence:</b> {_esc(s["divergence"])}',bg="#fdf5e0",border="#ecdca6"))
-
-    # For an ETF the news IS the point — the SUMMARY of what its holdings' news
-    # means for the fund goes up here too (prose, not raw article links — those
-    # stay at the end of the card with the rest of the sources).
-    etf_an=s.get("etf") or {}
-    if is_etf and (etf_an.get("move_explainer") or etf_an.get("holdings_news_impact")):
-        inner=""
-        for key,lab in [("move_explainer","What moved it today"),("holdings_news_impact","Across the holdings")]:
-            if etf_an.get(key): inner+=f'<div style="margin:4px 0;font-size:15px"><b>{lab}:</b>{_prose(etf_an[key])}</div>'
-        H.append(_box(inner,bg="#eef3fb",border="#d5e2f7"))
-
-    # The point of holding a fund is the companies inside it — so each major
-    # component company gets its OWN block: what happened to that company, what
-    # it means for the fund, and its own article links.
+        rc = e["recent"]; sp = rc.get("eps_surprise_pct")
+        if sp is None:       # only the date is known (e.g. PSX) — no beat/miss claim
+            badges.append(_pill(f"results out {rc.get('date')}", _BLUE, "#eef3fb"))
+        else:
+            beat = sp > 0
+            badges.append(_pill(f"reported {rc.get('date')}: EPS {'beat' if beat else 'miss'} {sp:+.1f}%",
+                                *(_SENT["bullish"] if beat else _SENT["bearish"])))
+    if e.get("upcoming"):
+        u = e["upcoming"]
+        try:
+            when = dt.date.fromisoformat(str(u.get("date"))).strftime("%d %b")
+        except ValueError:
+            when = str(u.get("date"))
+        badges.append(_pill(f"{extras.get('earnings_label', 'earnings')} {when} ({u.get('days_away')}d)",
+                            _AMBER, "#fdf5e0"))
     if is_etf:
-        H.append(_component_news(tk,etf_an,extras))
+        badges.append(_pill("ETF / fund", _BLUE, "#eef3fb"))
+    if badges:
+        H.append(f'<div style="margin:6px 0">{" ".join(badges)}</div>')
 
-    # ---- 2) CROWD sentiment ----
-    H.append(_crowd_panel(cw))
-    if not (cw and cw.get("has_data")):
-        st = extras.get("crowd_status")
-        if st == "no_key":
-            H.append('<div style="font-size:14px;color:#8a6d00;margin:2px 0">👥 Crowd sentiment off — set '
-                     '<b>ADANOS_API_KEY</b> (free at adanos.org) to enable Reddit · X · News · Polymarket sentiment.</div>')
-        elif st == "empty":
-            H.append('<div style="font-size:14px;color:#9aa0a6;margin:2px 0">👥 Crowd sentiment: no Adanos data for this name this run.</div>')
-        elif st == "pk_thin":
-            H.append('<div style="font-size:14px;color:#9aa0a6;margin:2px 0">👥 Crowd sentiment: no Reddit chatter found for this name (PSX discussion is thin; set REDDIT_CLIENT_ID/SECRET for reliable search).</div>')
-    if s.get("crowd_note"):
-        H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">👥 {_esc(s["crowd_note"])}</div>')
+    # 1) This week's news — only if there WAS news
+    if _pts(s.get("summary")):
+        inner = _label("This week's news", _BLUE) + _bullets(s.get("summary"), fs="15px", color="#1a1a1a")
+        if _pts(s.get("news_impact")):
+            inner += f'<div style="margin-top:4px"><b style="font-size:14px">Impact:</b>{_bullets(s.get("news_impact"), fs="14px")}</div>'
+        H.append(_box(inner, bg="#f5f8fe", border="#d9e3f5"))
+    etf_an = s.get("etf") or {}
+    if is_etf and _pts(etf_an.get("move_explainer")):
+        H.append(_box(_label("What moved the fund this week", _BLUE) + _bullets(etf_an["move_explainer"], fs="14px"),
+                      bg="#f5f8fe", border="#d9e3f5"))
+    if is_etf:
+        H.append(_component_block(tk, s, extras))
 
-    # ---- 3) TECHNICALS — rule-based indicators + the AI's technical read, together ----
-    tech=(extras.get("technicals") or {}).get(tk)
-    tr=s.get("technical_read") or {}
-    tech_inner=('<div style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368;margin-bottom:4px">Technical analysis</div>'
-                +_tech_panel(tech))
-    if tr.get("call"):
-        tech_inner+=(f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid #e9ecef">'
-                     f'<span style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368">Technical read</span>'
-                     f'{_call_pill(tr.get("call"))}<span style="font-size:13px;color:#9aa0a6">AI, technicals only</span></div>'
-                     f'<div style="margin-top:4px">{_prose(tr.get("rationale",""))}</div>')
-    H.append(_box(tech_inner))
+    cw = (extras.get("crowd") or {}).get(tk) or {}
+    if cw.get("has_data"):
+        H.append(f'<div style="font-size:13px;color:{_GREY};margin:4px 0">👥 {_crowd_line(cw)}</div>')
 
-    # ---- 4) FUNDAMENTALS / fund data ----
+    # 2) How it travelled over the week
+    ptab = _progression_table(prog)
+    pro_ai = _bullets(s.get("progression"), fs="14px")
+    if ptab or pro_ai:
+        H.append(_box(_label("How it travelled this week") + ptab + pro_ai))
+
+    # 3) Earnings & outlook
+    ed = s.get("earnings") or {}
+    if any(ed.get(k) for k in ("result", "outlook", "management_review")):
+        inner = _label("Earnings & outlook", _GREEN)
+        for k, lab in (("result", "Result"), ("outlook", "Outlook"), ("management_review", "Management")):
+            if ed.get(k):
+                inner += f'<div style="font-size:14px;margin:2px 0"><b>{lab}:</b> {_esc(ed[k])}</div>'
+        H.append(_box(inner, bg="#f3f9f4", border="#d5ead9"))
+
+    # 4) Technicals + fundamentals (compact)
+    H.append(_tech_line((extras.get("technicals") or {}).get(tk), s.get("technical_read")))
     if is_etf and f:
-        prof=(extras.get("etf") or {}).get(tk); r=(prof.returns if prof else {}) or {}
-        left=_grid([("Returns",f"1d {_num(r.get('1d'),'%')} · 1w {_num(r.get('1w'),'%')} · 1m {_num(r.get('1m'),'%')} · 3m {_num(r.get('3m'),'%')}"),
-                    ("",f"6m {_num(r.get('6m'),'%')} · YTD {_num(r.get('ytd'),'%')} · 1y {_num(r.get('1y'),'%')}"),
-                    ("Risk",(f"vol {_num(prof.vol_1y,'%',nd=1)} · maxDD {_num(prof.max_drawdown_1y,'%',nd=1)} · beta {prof.beta if prof and prof.beta is not None else 'n/a'}") if prof else "n/a")])
-        right=_grid([("Category",_esc((prof.category if prof else f.category) or "n/a")),("AUM",_money(prof.aum if prof else f.aum)),
-                     ("Expense",_expense(prof.expense_ratio if prof else None)),("Yield",_num(prof.etf_yield if prof else f.etf_yield,pct=True)),
-                     ("NAV prem/disc",_num(prof.premium_discount if prof else None,"%")),("Top-10 wt",_num(prof.top10_weight if prof else None,"%",nd=1))])
-        H.append(_box(f'<div style="display:flex;gap:20px;flex-wrap:wrap"><div style="flex:1;min-width:250px">{left}</div><div style="flex:1;min-width:230px">{right}</div></div>'))
-        if prof and prof.rel_market and not prof.tracks_benchmark:
-            rel=" · ".join(f"{k} {v:+.1f}" for k,v in prof.rel_market.items())
-            H.append(f'<div style="font-size:15px;color:#3c4043;margin:2px 0 6px"><b>vs {_esc(prof.benchmark)} (% pts):</b> {rel}</div>')
-        elif prof and prof.tracks_benchmark:
-            H.append(f'<div style="font-size:14px;color:#9aa0a6;margin:2px 0 6px">Tracks the {_esc(prof.benchmark)} benchmark (relative performance ≈ 0).</div>')
-        if prof and prof.holdings:
-            rows=('<tr style="color:#5f6368;font-size:14px"><td style="padding:3px 8px 3px 0">Holding</td>'
-                  '<td style="text-align:right;padding:3px 8px">Weight</td><td style="text-align:right;padding:3px 8px">1d</td>'
-                  '<td style="text-align:right;padding:3px 0">Contribution</td></tr>')
-            for h in prof.holdings[:8]:
-                cc=h.contribution; ccol="#0a7d33" if (cc or 0)>0 else "#b3261e" if (cc or 0)<0 else "#5f6368"
-                rows+=(f'<tr><td style="padding:3px 8px 3px 0;font-size:15px">{_esc(h.symbol)} '
-                       f'<span style="color:#9aa0a6">{_esc((h.name or "")[:20])}</span></td>'
-                       f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_num((h.weight or 0)*100,"%",nd=1)}</td>'
-                       f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_num(h.ret_1d,"%")}</td>'
-                       f'<td style="text-align:right;padding:3px 0;font-size:15px;color:{ccol}">{("%+.3f"%cc) if cc is not None else "n/a"}</td></tr>')
-            rows+=(f'<tr><td colspan="3" style="padding:5px 0;font-weight:700;font-size:15px">≈ explained move</td>'
-                   f'<td style="text-align:right;font-weight:700;font-size:15px">{("%+.3f"%prof.explained_move) if prof.explained_move is not None else "n/a"} pts</td></tr>')
-            H.append(_box('<div style="font-size:15px;font-weight:700;margin-bottom:4px">What moved the fund today</div>'
-                          f'<table style="border-collapse:collapse;width:100%">{rows}</table>'))
-        sw=(prof.sector_weights if prof else f.sector_weights) or {}
-        if sw:
-            H.append(f'<div style="font-size:15px;color:#3c4043;margin:4px 0"><b>Sectors:</b> '
-                     + ", ".join(f"{_esc(k)} {v}%" for k,v in list(sw.items())[:6])+'</div>')
-        if prof and prof.peers:
-            rows=('<tr style="color:#5f6368;font-size:14px"><td style="padding:3px 8px 3px 0">ETF</td>'
-                  '<td style="text-align:right;padding:3px 8px">1y</td><td style="text-align:right;padding:3px 8px">Expense</td>'
-                  '<td style="text-align:right;padding:3px 0">AUM</td></tr>')
-            rows+=(f'<tr><td style="padding:3px 8px 3px 0;font-size:15px"><b>{_esc(tk)} (this)</b></td>'
-                   f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_num(r.get("1y"),"%")}</td>'
-                   f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_expense(prof.expense_ratio)}</td>'
-                   f'<td style="text-align:right;padding:3px 0;font-size:15px">{_money(prof.aum)}</td></tr>')
-            for pe in prof.peers:
-                rows+=(f'<tr><td style="padding:3px 8px 3px 0;font-size:15px">{_esc(pe.ticker)}</td>'
-                       f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_num(pe.ret_1y,"%")}</td>'
-                       f'<td style="text-align:right;padding:3px 8px;font-size:15px">{_expense(pe.expense)}</td>'
-                       f'<td style="text-align:right;padding:3px 0;font-size:15px">{_money(pe.aum)}</td></tr>')
-            H.append(_box('<div style="font-size:15px;font-weight:700;margin-bottom:4px">vs competitor ETFs</div>'
-                          f'<table style="border-collapse:collapse;width:100%">{rows}</table>'))
+        prof = (extras.get("etf") or {}).get(tk)
+        r = (prof.returns if prof else {}) or {}
+        rows = [("Returns", " · ".join(f"{k} {_pct(r.get(k), bold=False)}" for k in ("1m", "3m", "ytd", "1y")
+                                       if r.get(k) is not None)),
+                ("Fund", " · ".join(x for x in [f"expense {_expense(prof.expense_ratio)}" if prof and prof.expense_ratio is not None else "",
+                                                f"AUM {_money(prof.aum, extras.get('currency_symbol', '$'))}" if prof and prof.aum else "",
+                                                f"top-10 {prof.top10_weight}%" if prof and prof.top10_weight else ""] if x))]
+        g = _grid(rows)
+        if g:
+            H.append(_box(_label("Fund data") + g))
     elif f:
-        sc=f.scores or {}
-        bars="".join(_bar(l,sc.get(k)) for l,k in [("Value","value"),("Growth","growth"),("Profit","profitability"),("Momentum","momentum"),("Health","health")])
-        bars+=f'<div style="font-size:15px;margin-top:4px"><b>Composite: {sc.get("composite","n/a")}/100</b></div>'
-        right=_grid([("Valuation",f"P/E {_num(f.pe)} · fwd {_num(f.forward_pe)} · P/S {_num(f.ps)} · PEG {_num(f.peg)}"),
-                     ("Growth",f"rev {_num(f.rev_growth,pct=True)} · EPS {_num(f.earn_growth,pct=True)}"),
-                     ("Profitability",f"net {_num(f.net_margin,pct=True)} · gross {_num(f.gross_margin,pct=True)} · ROE {_num(f.roe,pct=True)}"),
-                     ("Momentum",f"1m {_num(f.ret_1m,'%')} · 3m {_num(f.ret_3m,'%')} · 6m {_num(f.ret_6m,'%')}"),
-                     ("Analyst",f"target {_num(f.target_mean)} ({_num(f.implied_upside,'%')} upside)"),
-                     ("Next earnings",(f"{_esc(f.next_earnings)} ({f.days_to_earnings}d)" if f.next_earnings else "n/a"))])
-        H.append(_box(f'<div style="display:flex;gap:20px;flex-wrap:wrap"><div style="flex:1;min-width:240px">{bars}</div><div style="flex:1;min-width:250px">{right}</div></div>'))
+        rows = [("Valuation", " · ".join(x for x in [f"P/E {_num(f.pe, nd=1)}" if (f.pe or 0) > 0 else "",
+                                                     f"fwd {_num(f.forward_pe, nd=1)}" if (f.forward_pe or 0) > 0 else "",
+                                                     f"P/S {_num(f.ps, nd=1)}" if f.ps else ""] if x)),
+                ("Growth / margin", " · ".join(x for x in [f"rev {_num(f.rev_growth, pct=True)}" if f.rev_growth is not None else "",
+                                                           f"net margin {_num(f.net_margin, pct=True)}" if f.net_margin else "",
+                                                           f"ROE {_num(f.roe, pct=True)}" if f.roe is not None else ""] if x)),
+                ("Analysts", f"target {_num(f.target_mean)} ({_num(f.implied_upside, '%', nd=1)})" if f.target_mean else "")]
+        g = _grid(rows)
+        if g or s.get("fundamental_read"):
+            H.append(_box(_label("Fundamentals") + g
+                          + (f'<div style="font-size:14px;color:{_GREY};margin-top:3px">{_esc(s["fundamental_read"])}</div>'
+                             if s.get("fundamental_read") else "")))
+    fil = (extras.get("filings") or {}).get(tk)
+    if fil:
+        H.append(f'<div style="font-size:14px;margin:4px 0">📄 <a href="{_esc(fil["url"])}" style="color:{_BLUE}">'
+                 f'{_esc(fil["form"])} filed {_esc(fil["filed"])}</a></div>')
 
-    if s.get("fundamental_read"):
-        H.append(f'<div style="font-size:15px;color:#5f6368;margin-bottom:6px">📊 {_esc(s["fundamental_read"])}</div>')
-
-    ed=s.get("earnings") or {}
-    if any(ed.get(k) for k in ("result","outlook","management_review")):
-        inner='<div style="font-weight:700;color:#0a7d33;margin-bottom:3px;font-size:15px">Earnings &amp; outlook</div>'
-        for k,lab in [("result","Result"),("outlook","Outlook"),("management_review","Management")]:
-            if ed.get(k): inner+=f'<div style="font-size:15px"><b>{lab}:</b> {_esc(ed[k])}</div>'
-        H.append(_box(inner,bg="#f1f7f1",border="#d5ead5"))
-
-    if is_etf and any(etf_an.get(k) for k in ("nav_read","vs_market","vs_peers","risks")):
-        inner='<div style="font-weight:700;color:#3367d6;margin-bottom:4px;font-size:15px">Fund analysis</div>'
-        for key,lab in [("nav_read","NAV"),("vs_market","vs market"),("vs_peers","vs competitors"),("risks","Risks")]:
-            if etf_an.get(key): inner+=f'<div style="margin:4px 0;font-size:15px"><b>{lab}:</b>{_prose(etf_an[key])}</div>'
-        H.append(_box(inner,bg="#f4f6fb",border="#dde4f0"))
-
-    fil=fils.get(tk)
-    if fil: H.append(f'<div style="font-size:15px;margin-bottom:6px">📄 <a href="{_esc(fil["url"])}" style="color:#3367d6">{_esc(fil["form"])} filed {_esc(fil["filed"])}</a></div>')
-
-    # ---- 5) DEBATE — research verdict + bull vs bear ----
-    H.append(_debate_panel(s))
-
-    # ---- 6) NEWS ARTICLES — the source list, LAST in the card (per user request:
-    #         sources sit at the very end, after the analysis + verdict) ----
-    if is_etf:
-        # Each component company's own headlines are shown with that company
-        # above, so only the fund's own news belongs down here.
-        H.append(_links_list(by_group.get(tk, []),label="ETF / fund news",limit=8))
-    else:
-        H.append(_links_list(by_group.get(tk, []),label="Sources & full articles",limit=8))
-
+    # 5) Verdict, then sources last
+    H.append(_verdict(s))
+    H.append(_links(arts, label="This week's articles", limit=6))
     H.append("</div>")
     return "".join(H)
 
 
-# --------------------------------------------------------------------------- #
-#  PORTFOLIO report
-# --------------------------------------------------------------------------- #
-def _lookthrough_panel(lt):
-    if not lt or not lt.get("companies"):
+def _scoreboard(stocks, funds, extras):
+    progs = extras.get("progression") or {}
+    rows = ""
+    for s in stocks:
+        tk = s.get("ticker")
+        f, p = funds.get(tk), progs.get(tk) or {}
+        v = ((s.get("debate") or {}).get("verdict") or {}).get("call")
+        prior = (s.get("prior_verdict") or {}).get("call")
+        verdict = (f'{_esc(str(prior).upper())} → ' if prior and v and prior != v else "") + (_esc(str(v).upper()) if v else "–")
+        rows += (f'<tr><td style="padding:5px 8px 5px 0;font-weight:700">{_esc(tk)}</td>'
+                 f'<td style="padding:5px 8px;text-align:right">{_num(f.price) if f and f.price is not None else ""}</td>'
+                 f'<td style="padding:5px 8px;text-align:right">{_pct(p.get("week_pct"))}</td>'
+                 f'<td style="padding:5px 8px;text-align:right">{_pct(p.get("m1_pct"), bold=False)}</td>'
+                 f'<td style="padding:5px 0 5px 8px;text-align:right;font-size:13px;white-space:nowrap">{verdict}</td></tr>')
+    if not rows:
         return ""
-    B=[_h2("Portfolio look-through", "true exposure across your holdings + what your ETFs hold")]
-    if lt.get("flags"):
-        fl="".join(f'<div style="font-size:15px;color:#6b5300;margin:2px 0">⚠️ {_esc(x)}</div>' for x in lt["flags"])
-        B.append(_box(fl,bg="#fdf9ec",border="#ecdca6"))
-    # top companies as bars (scaled to the largest so bars are readable)
-    comps=lt["companies"][:12]
-    mx=max((c["total_pct"] for c in comps), default=1) or 1
-    rows=""
+    head = ('<tr style="color:#80868b;font-size:12px;text-transform:uppercase;letter-spacing:.3px">'
+            '<td style="padding:0 8px 4px 0">Holding</td><td style="padding:0 8px 4px;text-align:right">Price</td>'
+            '<td style="padding:0 8px 4px;text-align:right">Week</td><td style="padding:0 8px 4px;text-align:right">1 month</td>'
+            '<td style="padding:0 0 4px 8px;text-align:right">Verdict</td></tr>')
+    return _box(f'<table style="width:100%;border-collapse:collapse;font-size:14px">{head}{rows}</table>')
+
+
+def _lookthrough(lt):
+    # Only meaningful when funds are held — with direct stocks only it just
+    # restates the weights.
+    if not lt or not lt.get("companies") or not any(c.get("via") for c in lt["companies"]):
+        return ""
+    comps = lt["companies"][:10]
+    mx = max((c["total_pct"] for c in comps), default=1) or 1
+    rows = ""
     for c in comps:
-        w=max(2,int(c["total_pct"]/mx*100))
-        tag=' <span style="color:#8a6d00;font-weight:700">◆ overlap</span>' if c["overlap"] else ""
-        detail=""
-        if c["direct_pct"]>0 and c["via"]:
-            detail=f' <span style="color:#9aa0a6">(direct {c["direct_pct"]}% + funds {round(c["total_pct"]-c["direct_pct"],2)}%)</span>'
-        elif c["via"] and c["direct_pct"]==0:
-            detail=f' <span style="color:#9aa0a6">(via {", ".join(v["etf"] for v in c["via"][:3])})</span>'
-        elif c["direct_pct"]>0:
-            detail=' <span style="color:#9aa0a6">(direct)</span>'
-        rows+=(f'<div style="display:flex;align-items:center;gap:8px;margin:3px 0">'
-               f'<span style="font-size:15px;width:150px"><b>{_esc(c["ticker"])}</b>{tag}</span>'
-               f'<span style="flex:1;background:#e9ecef;border-radius:5px;height:12px"><span style="display:block;height:12px;border-radius:5px;width:{w}%;background:#3367d6"></span></span>'
-               f'<span style="font-size:15px;width:52px;text-align:right;font-weight:700">{c["total_pct"]}%</span>'
-               f'<span style="font-size:14px;flex-basis:100%;padding-left:158px;margin-top:-2px">{detail}</span></div>')
-    B.append(_box('<div style="font-weight:700;font-size:16px;margin-bottom:6px">Top companies by true exposure</div>'+rows))
-    # sectors
-    if lt.get("sectors"):
-        smx=max((s["pct"] for s in lt["sectors"]), default=1) or 1
-        srows=""
-        for s in lt["sectors"][:8]:
-            w=max(2,int(s["pct"]/smx*100))
-            srows+=(f'<div style="display:flex;align-items:center;gap:8px;margin:3px 0">'
-                    f'<span style="font-size:15px;width:170px">{_esc(s["sector"])}</span>'
-                    f'<span style="flex:1;background:#e9ecef;border-radius:5px;height:12px"><span style="display:block;height:12px;border-radius:5px;width:{w}%;background:#0a7d33"></span></span>'
-                    f'<span style="font-size:15px;width:46px;text-align:right;font-weight:700">{s["pct"]}%</span></div>')
-        B.append(_box('<div style="font-weight:700;font-size:16px;margin-bottom:6px">Sector allocation (look-through)</div>'+srows))
-    note=("Equal weight assumed (add a <b>weight</b> to each holding in config for real allocation). "
-          if lt.get("equal_weight") else "")
-    B.append(f'<div style="font-size:14px;color:#9aa0a6;margin-top:2px">{note}'
-             f'Company figures use each ETF\'s disclosed top holdings (largest overlaps); '
-             f'sector figures use full ETF sector weightings.</div>')
-    return "".join(B)
-
-
-_REGION_FLAG = {"US": "🇺🇸", "PK": "🇵🇰"}
+        w = max(2, int(c["total_pct"] / mx * 100))
+        via = ""
+        if c.get("via") and not c.get("direct_pct"):
+            via = "via " + ", ".join(v["etf"] for v in c["via"][:3])
+        elif c.get("direct_pct") and c.get("via"):
+            via = f"direct {c['direct_pct']}% + funds"
+        rows += (f'<tr><td style="padding:2px 8px 2px 0;font-size:14px;white-space:nowrap"><b>{_esc(c["ticker"])}</b>'
+                 + (' <span style="color:#8a6d00">◆</span>' if c.get("overlap") else "") + '</td>'
+                 f'<td style="width:55%;padding:2px 6px"><div style="background:#e9ecef;border-radius:4px;height:10px">'
+                 f'<div style="width:{w}%;height:10px;border-radius:4px;background:{_BLUE}"></div></div></td>'
+                 f'<td style="padding:2px 0 2px 6px;font-size:14px;text-align:right;font-weight:700">{c["total_pct"]}%</td>'
+                 f'<td style="padding:2px 0 2px 8px;font-size:12px;color:#9aa0a6">{_esc(via)}</td></tr>')
+    flags = "".join(f'<div style="font-size:13px;color:#6b5300;margin:2px 0">⚠️ {_esc(x)}</div>' for x in (lt.get("flags") or []))
+    note = ("Equal weights assumed (add a weight to each holding in config.yaml). " if lt.get("equal_weight") else "")
+    return (_h2("Portfolio look-through", "true company exposure across direct holdings and what your ETFs hold")
+            + _box(flags + f'<table style="width:100%;border-collapse:collapse">{rows}</table>'
+                   + f'<div style="font-size:12px;color:#9aa0a6;margin-top:4px">{note}◆ = held in more than one place. '
+                     'ETF figures use each fund\'s disclosed top holdings.</div>'))
 
 
 def build_portfolio(analysis, items, funds, extras):
-    today=_now_local().strftime("%A, %d %B %Y")
-    by_group=defaultdict(list)
-    for it in items: by_group[it.group].append(it)
-    status=analysis.get("_status", {})
-    region=extras.get("region","US")
-    subject=f"📊 Portfolio Digest {region} — {_now_local():%b %d}"
-    B=[]
-    B.append(f'<div style="background:#f6f8fa;border-left:4px solid #3367d6;padding:12px 16px;border-radius:6px;margin-bottom:18px">'
-             f'<div style="font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:#3367d6;margin-bottom:6px">Portfolio overview</div>'
-             f'{_prose(analysis.get("market_overview",""),fs="16px",color="#1a1a1a")}</div>')
-    B.append(_flags_row(extras.get("flags")))
-    B.append(_lookthrough_panel(extras.get("look_through")))
-    prio=analysis.get("priority", [])
+    region = extras.get("region", "US")
+    by_group = defaultdict(list)
+    for it in items:
+        by_group[it.group].append(it)
+    status = analysis.get("_status", {})
+    stocks = [s for s in analysis.get("stocks", []) if s.get("ticker")]
+    order = [s.get("ticker") for s in extras.get("holdings_order", [])] or [s["ticker"] for s in stocks]
+    stocks.sort(key=lambda s: order.index(s["ticker"]) if s["ticker"] in order else 99)
+    period = extras.get("period_label", "")
+    week_end = _now_local().strftime("%a %d %b %Y")
+    subject = f"📊 Weekly Portfolio Digest {region} — week to {_now_local():%d %b}"
+    B = []
+    ov = _bullets(analysis.get("week_overview"), fs="15px", color="#1a1a1a", limit=5)
+    if ov:
+        B.append(f'<div style="background:#f6f8fa;border-left:4px solid {_BLUE};padding:10px 14px;border-radius:6px;margin-bottom:12px">'
+                 f'{_label("Your portfolio this week", _BLUE)}{ov}</div>')
+    B.append(_scoreboard(stocks, funds, extras))
+    prio = [p for p in (analysis.get("priority") or []) if p.get("ticker") and p.get("why")][:4]
     if prio:
-        lis="".join(f'<li style="margin:4px 0"><b>{_esc(p.get("ticker",""))}</b> — {_esc(p.get("why",""))}</li>' for p in prio[:6])
-        B.append(f'{_h2("What matters today")}<ol style="margin:0;padding-left:20px;font-size:16px">{lis}</ol>')
-    B.append(_h2("Your holdings"))
-    for tk,s in {x.get("ticker"):x for x in analysis.get("stocks", [])}.items():
-        B.append(_stock_card(tk,s,funds,extras,by_group))
-    macro=analysis.get("macro", {}) or {}
-    if macro.get("summary") or macro.get("points"):
-        B.append(_h2("Macro backdrop"))
-        if macro.get("summary"):
-            B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
-        for p in _pts(macro.get("points"))[:6]:
-            B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {_esc(p)}</div>')
-    B.append(_risks_and_events(macro))
-    B.append(_legend())
-    html_body=_wrap(f"Portfolio Digest {region}",today,_banner(status),"".join(B))+_footer()
-    # text
-    T=[f"PORTFOLIO DIGEST {region} — {today}","",("AI: "+status.get("engine","")) if status.get("ok") else ("AI FAILED — heuristic. "+status.get("reason","")),"",analysis.get("market_overview","")]
-    for tk,s in {x.get("ticker"):x for x in analysis.get("stocks", [])}.items():
-        T+=_stock_text(tk,s,funds,extras,by_group)
-    return subject,html_body,"\n".join(str(x) for x in T)
+        B.append(_h2("What mattered most"))
+        B.append("".join(f'<div style="font-size:15px;margin:4px 0"><b>{_esc(p["ticker"])}</b> — {_esc(p["why"])}</div>'
+                         for p in prio))
+    B.append(_h2("Your holdings", "this week's news, how each name travelled, and the verdict"))
+    for s in stocks:
+        B.append(_holding_card(s["ticker"], s, funds, extras, by_group))
+    B.append(_lookthrough(extras.get("look_through")))
+    ev = extras.get("holding_events") or []
+    if ev:
+        B.append(_h2("Coming up for your holdings"))
+        B.append("".join(f'<div style="font-size:15px;margin:4px 0"><b>{_esc(e["date"].strftime("%a %d %b"))}</b> — '
+                         f'{_esc(e["ticker"])}: {_esc(e["title"])}</div>' for e in ev))
+    risks = _pts(analysis.get("risks"))
+    if risks:
+        B.append(_h2("Risks to your holdings"))
+        B.append(_bullets(risks, limit=5))
+    B.append('<div style="margin-top:18px;font-size:13px;color:#80868b">How to read: <b>Week</b> = last 5 sessions; '
+             '<b>vs benchmark</b> = the stock\'s week minus the benchmark\'s. <b>Verdict</b> = a judge model\'s call after '
+             'reading a bull and a bear analyst, refreshed weekly and compared with last week\'s. Technicals are context, '
+             'not the basis of the call.</div>')
+    html_body = _wrap(f"Weekly Portfolio Digest {region}", f"Week to {week_end}", period, _banner(status),
+                      "".join(B), _footer(extras.get("footer_sources", "")))
+    T = [f"WEEKLY PORTFOLIO DIGEST {region} — week to {week_end}", period, ""]
+    T += [f"- {p}" for p in _pts(analysis.get("week_overview"))]
+    for s in stocks:
+        tk = s["ticker"]; f = funds.get(tk); p = (extras.get("progression") or {}).get(tk) or {}
+        T.append(f"\n{tk}  {_num(f.price) if f and f.price is not None else ''}"
+                 + (f"  week {p['week_pct']:+.2f}%" if p.get("week_pct") is not None else ""))
+        T += [f"  - {x}" for x in _pts(s.get("summary"))]
+        v = (s.get("debate") or {}).get("verdict") or {}
+        if v.get("call"):
+            T.append(f"  VERDICT: {v['call'].upper()} ({v.get('conviction', '')}) — " + "; ".join(_pts(v.get("pointers"))))
+    return subject, html_body, "\n".join(T)
 
 
 # --------------------------------------------------------------------------- #
-#  MARKET report
+#  DAILY MARKET
 # --------------------------------------------------------------------------- #
-def build_market(port_analysis, watch_analysis, items, funds, extras, watch_reasons=None):
-    today=_now_local().strftime("%A, %d %B %Y")
-    weekly=bool(extras.get("weekly")); watch_reasons=watch_reasons or {}
-    by_group=defaultdict(list)
-    for it in items: by_group[it.group].append(it)
-    status=port_analysis.get("_status", {})
-    region=extras.get("region","US")
-    flag=_REGION_FLAG.get(region,"🌐")
-    subject=f"{flag} {'Weekly ' if weekly else ''}Market Digest {region} — {_now_local():%b %d}"
-    B=[]
-    B.append(f'<div style="background:#f6f8fa;border-left:4px solid #3367d6;padding:12px 16px;border-radius:6px;margin-bottom:18px">'
-             f'<div style="font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:#3367d6;margin-bottom:6px">Market overview</div>'
-             f'{_prose(port_analysis.get("market_overview",""),fs="16px",color="#1a1a1a")}</div>')
-    B.append(_flags_row(extras.get("flags")))
-
-    sh=port_analysis.get("sector_highlights", [])
-    if sh:
-        B.append(_h2("Sector highlights","from today's news flow"))
-        for sec in sh:
-            pts="".join(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(p)}</div>' for p in _pts(sec.get("points"))[:6])
-            B.append(_box(f'<div style="display:flex;justify-content:space-between;align-items:center">'
-                          f'<span style="font-weight:700;font-size:17px">{_esc(sec.get("sector",""))}</span> {_sent_pill(sec.get("call"))}</div>{pts}'))
-
-    # What the whole-market scan turned up — the pool the watch list was drawn
-    # from. Shown so you can see the names that were considered, not just picked.
-    cands=extras.get("candidates") or []
-    if cands:
-        covered={(s.get("ticker") or "").upper() for s in (watch_analysis or {}).get("stocks", [])}
-        rows=""
-        for c in cands[:15]:
-            mark="✓" if c["ticker"].upper() in covered else "·"
-            move=_pct_span(c.get("pct_1d")) if c.get("pct_1d") is not None else ""
-            vol=f' <span style="color:#9aa0a6;font-size:13px">{c["vol_ratio"]}x vol</span>' if c.get("vol_ratio") else ""
-            rows+=(f'<tr><td style="padding:4px 8px 4px 0;white-space:nowrap;vertical-align:top">'
-                   f'<span style="color:#9aa0a6">{mark}</span> <b>{_esc(c["ticker"])}</b></td>'
-                   f'<td style="padding:4px 8px 4px 0;white-space:nowrap;vertical-align:top">{move}{vol}</td>'
-                   f'<td style="padding:4px 0;font-size:14px;color:#3c4043">'
-                   f'<a href="{_esc(c.get("url",""))}" style="color:#1a40b0;text-decoration:underline">{_esc(c.get("headline",""))}</a>'
-                   f' <span style="color:#9aa0a6">— {_esc(c.get("source",""))}</span></td></tr>')
-        B.append(_h2("Whole-market scan", f"{len(cands)} companies outside your portfolio that were "
-                                          f"in today's news — ✓ = taken forward for full analysis"))
-        B.append(_box(f'<table style="border-collapse:collapse;width:100%">{rows}</table>'))
-
-    ws=watch_analysis.get("stocks", []) if watch_analysis else []
-    if ws:
-        wsub = "full analysis — news, technicals + research verdict"
-        if extras.get("candidates"):
-            wsub = ("scanned across the whole US market, not just your portfolio · " + wsub)
-        if extras.get("shariah"):
-            wsub += " · Shariah-screened"
-        B.append(_h2("Stocks to watch", wsub))
-        for s in ws:
-            tk=s.get("ticker")
-            B.append(_stock_card(tk,s,funds,extras,by_group,watch_reason=watch_reasons.get(tk)))
-
-    # Crypto highlight (all configured major coins)
-    ch = port_analysis.get("crypto_highlight") or {}
-    crypto = extras.get("crypto") or {}
-    snaps = crypto.get("snapshot") or []
-    snap = {c["symbol"]: c for c in snaps}
-    csent = crypto.get("sentiment") or {}
-    ctech = crypto.get("technicals") or {}
-    ai_coins = {c.get("symbol"): c for c in (ch.get("coins") or [])}
-    # union: every coin we have data for (snapshot order), plus any AI-only coins
-    order = [c["symbol"] for c in snaps] + [s for s in ai_coins if s not in snap]
-    if order or ch.get("points"):
-        B.append(_h2("Crypto", "major coins"))
-        head = (f'<div style="display:flex;justify-content:space-between;align-items:center">'
-                f'<span style="font-weight:700;font-size:17px">Crypto market</span> {_sent_pill(ch.get("call"))}</div>')
-        pts = "".join(f'<div style="font-size:15px;color:#3c4043;margin:4px 0">• {_esc(p)}</div>'
-                      for p in _pts(ch.get("points"))[:5])
-        rows = ""
-        for sym in order[:10]:
-            c = ai_coins.get(sym, {})
-            sp = snap.get(sym, {})
-            move = _pct_span(sp.get("pct")) if sp.get("pct") is not None else ""
-            m7 = f' <span style="color:#9aa0a6">7d {sp["pct7d"]:+.1f}%</span>' if sp.get("pct7d") is not None else ""
-            price = f'<span style="color:#5f6368">{sp.get("price")}</span> ' if sp.get("price") is not None else ""
-            con = (csent.get(sym) or {}).get("consensus", {})
-            crowd_bit = (f' · crowd {con.get("label")} ({con.get("bullish")}%▲)'
-                         if con.get("label") not in (None, "n/a") else "")
-            tpanel = ""
-            if ctech.get(sym) and not getattr(ctech[sym], "error", None):
-                tpanel = (f'<details style="margin-top:4px"><summary style="cursor:pointer;color:#3367d6;'
-                          f'font-size:14px;font-weight:600;user-select:none">▾ Technicals for {_esc(sym)}</summary>'
-                          f'<div style="margin-top:6px">{_tech_panel(ctech[sym])}</div></details>')
-            rows += (f'<tr><td style="padding:8px 10px 8px 0;font-weight:700;white-space:nowrap;vertical-align:top">{_esc(sym)}</td>'
-                     f'<td style="padding:8px 10px 8px 0;vertical-align:top">{_call_pill(c.get("call"))}</td>'
-                     f'<td style="padding:8px 0;font-size:15px;color:#3c4043">{price}{move}{m7}'
-                     f'<span style="color:#9aa0a6;font-size:14px">{crowd_bit}</span>'
-                     f'<br>{_esc(c.get("rationale") or c.get("reason") or "")}{tpanel}</td></tr>')
-        cnews = _links_block(by_group.get("Crypto", [])[:8], label="Crypto news")
-        B.append(_box(head + pts + (f'<table style="border-collapse:collapse;width:100%;margin-top:6px">{rows}</table>' if rows else "") + cnews))
-        B.append('<div style="font-size:14px;color:#9aa0a6;margin-top:-6px">Per-coin call = combined view (price/technicals + crypto news). '
-                 'Crypto is informational; digital-asset permissibility under Shariah is debated — verify independently.</div>')
-
-    topics=port_analysis.get("topics", [])
-    if topics:
-        B.append(_h2("Industries & themes"))
-        for t in topics:
-            name=t.get("topic","")
-            inner=(f'<div style="display:flex;justify-content:space-between;align-items:center">'
-                   f'<span style="font-weight:700;font-size:17px">{_esc(name)}</span> {_sent_pill(t.get("sentiment"))}</div>'
-                   f'{_prose(t.get("summary",""))}')
-            kc=t.get("key_companies") or []
-            if kc:
-                inner+='<div style="font-size:15px;margin:4px 0"><b>Key movers (not in your portfolio):</b></div>'
-                for c in kc[:5]: inner+=f'<div style="font-size:15px;margin:2px 0">• <b>{_esc(c.get("name",""))}</b> — {_esc(c.get("note",""))}</div>'
-            inner+=_links_block(by_group.get(name, [])[:6])
-            B.append(_box(inner))
-
-    sectors=port_analysis.get("sectors", []); sec_news=extras.get("sector_news", {})
-    if weekly and (sectors or sec_news):
-        B.append(_h2("Weekly sector deep-dive"))
-        for sec in sectors:
-            name=sec.get("sector","")
-            inner=f'<div style="font-weight:700;font-size:17px">{_esc(name)}</div>{_prose(sec.get("summary",""))}'
-            for d in _pts(sec.get("developments")): inner+=f'<div style="font-size:15px;margin:2px 0">• {_esc(d)}</div>'
-            if sec.get("read_across"): inner+=f'<div style="font-size:15px;color:#5f6368;margin-top:4px">Read-across: {_esc(sec["read_across"])}</div>'
-            inner+=_links_block(sec_news.get(name, [])[:5])
-            B.append(_box(inner))
-
-    macro=port_analysis.get("macro", {}) or {}; macro_items=by_group.get("Macro", [])
-    if macro.get("summary") or macro.get("points") or macro_items:
-        B.append(_h2("Macro"))
-        if macro.get("summary"): B.append(_prose(macro["summary"],fs="16px",color="#1a1a1a"))
-        for p in _pts(macro.get("points"))[:6]:
-            B.append(f'<div style="font-size:15px;color:#3c4043;margin:3px 0">• {_esc(p)}</div>')
-        B.append(_links_block(macro_items[:8]))
-    B.append(_risks_and_events(macro))
-    B.append(_legend())
-    html_body=_wrap(("Weekly " if weekly else "")+f"Market Digest {region}",today,_banner(status),"".join(B))+_footer()
-
-    T=[f"MARKET DIGEST {region}{' (WEEKLY)' if weekly else ''} — {today}","",port_analysis.get("market_overview","")]
-    if sh:
-        T.append("\nSECTOR HIGHLIGHTS:")
-        for sec in sh:
-            T.append(f"\n{sec.get('sector','')} [{(sec.get('call') or '').upper()}]")
-            for p in _pts(sec.get("points"))[:4]: T.append(f"  • {p}")
-    if ws:
-        T.append("\nSTOCKS TO WATCH (full analysis):")
-        for s in ws: T+=_stock_text(s.get("ticker"),s,funds,extras,by_group)
-    return subject,html_body,"\n".join(str(x) for x in T)
-
-
-def _stock_text(tk,s,funds,extras,by_group):
-    f=funds.get(tk); sg=(extras.get("sentiment") or {}).get(tk,{}); cw=(extras.get("crowd") or {}).get(tk,{})
-    cur=(getattr(f,"currency","") or "") if f else ""
-    curtag=f" {cur}" if cur and cur!="USD" else ""
-    L=[f"\n{tk}"+((f"  {f.price:.2f}{curtag}" if f and f.price is not None else "")+(f" ({f.change_1d:+.2f}%)" if f and f.change_1d is not None else ""))
-       +f"  [{(s.get('impact') or '').upper()} / {(s.get('sentiment') or '').upper()}]"]
-    con=(cw or {}).get("consensus",{})
-    tone=(f"news tone {sg.get('score','n/a')} ({sg.get('label','n/a')})"
-          + (" [from holdings news]" if sg.get("basis")=="holdings" else "")) if sg.get("n") \
-         else "news tone: no direct news this run"
-    ment=_mentions_total(cw or {})
-    L.append(f"  {tone}; "
-             f"crowd {con.get('label','n/a')} ({con.get('bullish','n/a')}% bull / {con.get('bearish','n/a')}% bear, "
-             f"buzz {con.get('buzz','n/a')}, {ment} mentions, {len((cw or {}).get('sources',{}))} sources)")
-    L.append(f"  {s.get('summary','')}")
-    if s.get("news_impact"): L.append(f"  NEWS IMPACT: {s['news_impact']}")
-    for e in ((s.get("etf") or {}).get("holdings_news") or []):
-        if not isinstance(e,dict) or not e.get("symbol"): continue
-        L.append(f"  COMPONENT {e['symbol']}"+(f" ({e.get('company')})" if e.get("company") else "")
-                 +(f" [{e['call']}]" if e.get("call") else ""))
-        for ln in str(e.get("news","")).splitlines():
-            if ln.strip(): L.append(f"      {ln.strip()}")
-        if e.get("impact_on_fund"): L.append(f"      For the fund: {e['impact_on_fund']}")
-    tech=(extras.get("technicals") or {}).get(tk)
-    if tech and not tech.error: L.append(f"  TECHNICALS: {tech.signal.upper()} | RSI {tech.rsi} | MACD {tech.macd_hist} | trend {tech.trend} | S/R {tech.support}/{tech.resistance}")
-    tr=s.get("technical_read") or {}
-    if tr.get("call"): L.append(f"  TECHNICAL READ (AI): {tr['call'].upper()} — {tr.get('rationale','')}")
-    for it in by_group.get(tk, [])[:5]: L.append(f"  • {it.title} — {it.source}\n    {it.url}")
-    return L
-
-
-def _debate_panel(s):
-    """Bull/bear/judge verdict — the opening-research headline for a name."""
-    d = s.get("debate") or {}
-    v = d.get("verdict") or {}
-    if not v.get("call"):
+def _flags_grid(flags, per_row=4):
+    if not flags:
         return ""
-    conv = (v.get("conviction") or "").lower()
-    conv_col = {"high": "#0a7d33", "medium": "#8a6d00", "low": "#9aa0a6"}.get(conv, "#5f6368")
-    risks = "".join(f'<li style="margin:2px 0">{_esc(r)}</li>' for r in _pts(v.get("key_risks"))[:3])
-    extra = ""
-    if v.get("start_here"):
-        extra += f'<div style="font-size:14px;margin-top:6px"><b>Start here:</b> {_esc(v["start_here"])}</div>'
-    if v.get("what_would_change_it"):
-        extra += f'<div style="font-size:14px;color:#5f6368;margin-top:3px"><b>Would change the call:</b> {_esc(v["what_would_change_it"])}</div>'
-    mode = d.get("mode", "debate")
-    roles = d.get("roles", {})
-    bull = _prose(d.get("bull", ""), fs="14px", color="#1a1a1a")
-    bear = _prose(d.get("bear", ""), fs="14px", color="#1a1a1a")
-    debate_block = ""
-    if mode == "debate" and (bull or bear):
-        rlabel = (f'bull: {roles.get("bull","?")} · bear: {roles.get("bear","?")} · judge: {roles.get("judge","?")}'
-                  if roles else "")
-        debate_block = (
-            f'<details style="margin-top:8px"><summary style="cursor:pointer;color:#3367d6;'
-            f'font-size:14px;font-weight:600;user-select:none">▾ Bull vs Bear debate</summary>'
-            f'<div style="margin-top:8px"><div style="background:#e6f6ec;border-left:3px solid #0a7d33;'
-            f'padding:8px 10px;border-radius:6px;font-size:14px;margin-bottom:6px"><b>🐂 Bull</b><br>{bull}</div>'
-            f'<div style="background:#fdeceb;border-left:3px solid #b3261e;padding:8px 10px;border-radius:6px;'
-            f'font-size:14px"><b>🐻 Bear</b><br>{bear}</div>'
-            f'<div style="font-size:12px;color:#9aa0a6;margin-top:4px">{_esc(rlabel)}</div></div></details>')
-    else:
-        rlabel = f'verdict via: {roles.get("judge","?")}' if roles else ""
-        debate_block = f'<div style="font-size:12px;color:#9aa0a6;margin-top:6px">{_esc(rlabel)}</div>' if rlabel else ""
-    tag = "single AI take (fund/ETF)" if mode == "single" else "3-model debate"
-    return _box(
-        f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:5px">'
-        f'<span style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5f6368">Research verdict</span>'
-        f'{_call_pill(v.get("call"))}'
-        f'<span style="font-size:13px;font-weight:700;color:{conv_col}">{conv.upper()} conviction</span>'
-        f'<span style="font-size:12px;color:#9aa0a6">{tag}</span></div>'
-        f'{_prose(v.get("verdict",""),color="#1a1a1a")}'
-        + (f'<div style="font-size:14px;margin-top:6px"><b>Key risks:</b><ul style="margin:3px 0;padding-left:20px">{risks}</ul></div>' if risks else "")
-        + extra + debate_block,
-        bg="#f7f9fc")
+    cells = []
+    for fl in flags:
+        p = fl.get("pct")
+        price = fl.get("price")
+        ptxt = f"{price:,.2f}" if isinstance(price, (int, float)) else _esc(price)
+        cells.append(f'<td style="width:{100//per_row}%;padding:7px 6px;border:1px solid #eef0f2;text-align:center;vertical-align:top">'
+                     f'<div style="font-size:12px;color:{_GREY}">{_esc(fl["name"])}</div>'
+                     f'<div style="font-size:15px;font-weight:700">{ptxt}</div>'
+                     f'<div style="font-size:13px">{_pct(p) if p is not None else ""}</div></td>')
+    rows = ""
+    for i in range(0, len(cells), per_row):
+        chunk = cells[i:i + per_row]
+        chunk += ['<td style="border:none"></td>'] * (per_row - len(chunk))
+        rows += "<tr>" + "".join(chunk) + "</tr>"
+    return f'<table style="border-collapse:collapse;width:100%;table-layout:fixed;margin:4px 0 6px">{rows}</table>'
+
+
+def _facts(pairs):
+    """[(label, value)] → one compact line of computed facts."""
+    pairs = [(l, v) for l, v in (pairs or []) if v not in (None, "")]
+    if not pairs:
+        return ""
+    return ('<div style="font-size:14px;color:#3c4043;margin-bottom:6px;line-height:1.7">'
+            + " · ".join(f'{_esc(l)} <b style="white-space:nowrap">{_esc(v)}</b>' for l, v in pairs) + '</div>')
+
+
+def _released_table(rel):
+    if not rel:
+        return ""
+    head = ('<tr style="color:#80868b;font-size:12px;text-transform:uppercase"><td style="padding:0 8px 4px 0">Release</td>'
+            '<td style="padding:0 8px 4px;text-align:right">Actual</td><td style="padding:0 8px 4px;text-align:right">Consensus</td>'
+            '<td style="padding:0 0 4px 8px;text-align:right">Previous</td></tr>')
+    rows = "".join(
+        f'<tr><td style="padding:4px 8px 4px 0;font-size:14px"><b>{_esc(e["label"])}</b>'
+        f'<div style="font-size:12px;color:#9aa0a6">{_esc(e["when"].strftime("%a %d %b, %H:%M ET"))}</div></td>'
+        f'<td style="padding:4px 8px;text-align:right;font-weight:700;font-size:14px">{_esc(e["actual"])}</td>'
+        f'<td style="padding:4px 8px;text-align:right;font-size:14px">{_esc(e["consensus"] or "–")}</td>'
+        f'<td style="padding:4px 0 4px 8px;text-align:right;font-size:14px;color:{_GREY}">{_esc(e["previous"] or "–")}</td></tr>'
+        for e in rel)
+    return f'<table style="width:100%;border-collapse:collapse">{head}{rows}</table>'
+
+
+def _calendar_table(events, fmt_when, note=""):
+    if not events:
+        return ""
+    rows = ""
+    for e in events:
+        meta = []
+        if e.get("consensus"):
+            meta.append(f"consensus {e['consensus']}")
+        if e.get("previous"):
+            meta.append(f"previous {e['previous']}")
+        rows += (f'<tr><td style="width:1%;padding:6px 14px 6px 0;vertical-align:top;font-size:13px;color:#3c4043;white-space:nowrap">'
+                 f'{_esc(fmt_when(e["when"], e.get("timed", True))).replace(" · ", "<br>")}</td>'
+                 f'<td style="padding:6px 0;vertical-align:top;font-size:14px"><b>{_esc(e["label"])}</b>'
+                 + (f' <span style="color:#80868b;font-size:12px">({_esc(e.get("region"))})</span>' if e.get("region") else "")
+                 + (f'<div style="font-size:13px;color:{_GREY}">{_esc(" · ".join(meta))}</div>' if meta else "")
+                 + (f'<div style="font-size:12px;color:#9aa0a6">{_esc(e.get("why", ""))}</div>' if e.get("why") else "")
+                 + '</td></tr>')
+    return (f'<table style="width:100%;border-collapse:collapse">{rows}</table>'
+            + (f'<div style="font-size:12px;color:#9aa0a6;margin-top:4px">{note}</div>' if note else ""))
+
+
+def _thesis_block(p):
+    v = ((p.get("debate") or {}).get("verdict") or {})
+    th = v.get("thesis")
+    if not th:
+        return ""
+    c = p.get("computed") or {}
+    cur = c.get("currency") or ""
+    figs = []
+    for lab, val in (("price", c.get("price")), ("support", c.get("support")), ("resistance", c.get("resistance"))):
+        if val is not None:
+            figs.append(_chip(lab, f"{val:,.2f}"))
+    if c.get("atr_pct") is not None:
+        figs.append(_chip("typical day (ATR)", f"{c['atr_pct']}%"))
+    if c.get("upside_to_res_pct") is not None:
+        figs.append(_chip("to resistance", f"{c['upside_to_res_pct']:+.1f}%"))
+        figs.append(_chip("to support", f"{c['downside_to_sup_pct']:+.1f}%"))
+    if c.get("dist_sma50") is not None:
+        figs.append(_chip("vs 50d avg", f"{c['dist_sma50']:+.1f}%"))
+    nc = c.get("next_catalyst")
+    if nc:
+        figs.append(_chip("next event", f"{nc['title']} {nc['date']}"))
+    rows = ""
+    for key, lab in (("catalyst", "Catalyst"), ("mechanism", "How it reaches the price"), ("priced_in", "Already priced in?"),
+                     ("horizon", "Horizon"), ("invalidation", "What would prove it wrong"), ("before_acting", "Verify first")):
+        if th.get(key):
+            style = f"background:#fdf2f1;border-radius:5px;padding:3px 6px;" if key == "invalidation" else ""
+            rows += f'<div style="font-size:14px;margin:4px 0;{style}"><b>{lab}:</b> {_esc(th[key])}</div>'
+    return (f'<div style="border:2px solid {_BLUE};border-radius:9px;margin:8px 0;overflow:hidden">'
+            f'<div style="background:{_BLUE};color:#fff;padding:6px 11px;font-size:13px;font-weight:800;letter-spacing:.3px">'
+            f'CATALYST THESIS — {_esc(p["ticker"])} · {_esc(str(v.get("call", "")).upper())}</div>'
+            f'<div style="background:#f4f7fc;padding:6px 10px;border-bottom:1px solid #dfe5ee">'
+            f'<div style="font-size:11px;color:#80868b;text-transform:uppercase;letter-spacing:.4px">Computed from price data — no AI'
+            + (f' ({_esc(cur)})' if cur and cur != "USD" else "") + f'</div>{"".join(figs)}</div>'
+            f'<div style="padding:6px 11px">{rows}</div></div>')
+
+
+def _pick_card(p, funds, extras, by_group):
+    currency_symbol = extras.get("currency_symbol", "$")
+    tk = p["ticker"]
+    f = funds.get(tk)
+    v = ((p.get("debate") or {}).get("verdict") or {})
+    call = (v.get("call") or "").lower()
+    shown = "watch" if call in ("", "hold") else call
+    H = ['<div style="border:1px solid #e3e6ea;border-radius:10px;padding:14px 15px;margin:0 0 16px;background:#fff">']
+    price = _num(f.price) if f and f.price is not None else ""
+    chg = _pct(f.change_1d) if f and f.change_1d is not None else ""
+    H.append(f'<table style="width:100%;border-collapse:collapse"><tr><td style="vertical-align:top">'
+             f'<span style="font-size:19px;font-weight:800">{_esc(tk)}</span> '
+             f'<span style="color:{_GREY};font-size:14px">{_esc((f.name if f else "") or "")}</span>'
+             f'<div style="font-size:15px">{price} {chg}</div></td>'
+             f'<td style="text-align:right;vertical-align:top">{_call_pill(shown)}</td></tr></table>')
+    sh = (extras.get("shariah") or {}).get(tk)
+    if sh:
+        col = {"pass": _SENT["bullish"], "review": _SENT["mixed"], "fail": _SENT["bearish"]}.get(sh["status"], _SENT["neutral"])
+        lab = sh.get("label") or {"pass": "✓ Shariah screen passed", "review": "⚠ Shariah: needs review",
+                                  "fail": "✗ Shariah: fails"}.get(sh["status"], "")
+        H.append(f'<div style="margin:4px 0">{_pill(lab, *col)}</div>')
+    inner = f'<div style="font-size:15px;color:#1a1a1a"><b>Catalyst:</b> {_esc(p.get("catalyst"))}</div>'
+    if p.get("why_now"):
+        inner += f'<div style="font-size:14px;color:#3c4043;margin-top:2px"><b>Why now:</b> {_esc(p["why_now"])}</div>'
+    H.append(_box(inner, bg="#fffaf0", border="#f0e2bd"))
+    H.append(_thesis_block(p))
+    H.append(_verdict(p, is_pick=True))
+    H.append(_tech_line((extras.get("technicals") or {}).get(tk)))
+    if f and not f.is_etf:
+        g = _grid([("Valuation", " · ".join(x for x in [f"P/E {_num(f.pe, nd=1)}" if (f.pe or 0) > 0 else "",
+                                                       f"fwd {_num(f.forward_pe, nd=1)}" if (f.forward_pe or 0) > 0 else "",
+                                                       f"mkt cap {_money(f.market_cap, currency_symbol)}" if f.market_cap else ""] if x)),
+                   ("Growth / margin", " · ".join(x for x in [f"rev {_num(f.rev_growth, pct=True)}" if f.rev_growth is not None else "",
+                                                              f"net margin {_num(f.net_margin, pct=True)}" if f.net_margin else ""] if x)),
+                   ("Analysts", f"target {_num(f.target_mean)} ({_num(f.implied_upside, '%', nd=1)})" if f.target_mean else "")])
+        if g:
+            H.append(_box(_label("Fundamentals") + g))
+    H.append(_links(by_group.get(tk, []), label="Articles", limit=4))
+    H.append("</div>")
+    return "".join(H)
+
+
+def _sector_table(moves, label="Sector ETF", cols=("1 day", "5 days")):
+    rows = [r for r in (moves or []) if r.get("pct_1d") is not None]
+    if not rows:
+        return ""
+    rows.sort(key=lambda r: -(r["pct_1d"]))
+    cells = "".join(f'<tr><td style="padding:3px 8px 3px 0;font-size:14px">{_esc(r["label"])} '
+                    f'<span style="color:#9aa0a6;font-size:12px">{_esc(r.get("note") or r["symbol"])}</span></td>'
+                    f'<td style="padding:3px 8px;text-align:right;font-size:14px">{_pct(r["pct_1d"])}</td>'
+                    f'<td style="padding:3px 0 3px 8px;text-align:right;font-size:13px">{_pct(r.get("pct_5d"), bold=False)}</td></tr>'
+                    for r in rows)
+    head = (f'<tr style="color:#80868b;font-size:12px;text-transform:uppercase"><td style="padding:0 8px 3px 0">{_esc(label)}</td>'
+            f'<td style="padding:0 8px 3px;text-align:right">{_esc(cols[0])}</td>'
+            f'<td style="padding:0 0 3px 8px;text-align:right">{_esc(cols[1])}</td></tr>')
+    return _box(f'<table style="width:100%;border-collapse:collapse">{head}{cells}</table>')
+
+
+def build_market(an, items, funds, extras, fmt_when):
+    region = extras.get("region", "US")
+    flag = {"US": "🇺🇸", "PK": "🇵🇰"}.get(region, "🌐")
+    by_group = defaultdict(list)
+    for it in items:
+        by_group[it.group].append(it)
+    status = an.get("_status", {})
+    today = _now_local().strftime("%A, %d %B %Y")
+    subject = f"{flag} Market Digest {region} — {_now_local():%a %d %b}"
+    cal = extras.get("calendar") or {}
+    B = []
+
+    tldr = _pts(an.get("tldr"))[:5]
+    if tldr:
+        B.append('<div style="background:#16191d;color:#fff;border-radius:10px;padding:12px 16px;margin-bottom:14px">'
+                 '<div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:#9aa0a6;margin-bottom:4px">TL;DR</div>'
+                 + "".join(f'<div style="font-size:15px;margin:5px 0;padding-left:14px;text-indent:-12px">•&nbsp;{_esc(t)}</div>'
+                           for t in tldr) + '</div>')
+    if extras.get("flags"):
+        B.append(_h2("Market levels", "close and 1-day move"))
+        B.append(_flags_grid(extras["flags"]))
+
+    # Policy & rates — computed facts (rate, next decision, yields) + the AI's read
+    facts = _facts(extras.get("policy_facts"))
+    pol = _bullets(an.get("policy_rates"))
+    if facts or pol:
+        B.append(_h2("Policy & rates"))
+        B.append(_box(facts + pol + _links(by_group.get("Policy & rates", []), limit=3)))
+    # Macro data — released prints (actual vs consensus) / latest indicators + the AI's read
+    rel = cal.get("released") or []
+    mfacts = _facts(extras.get("macro_facts"))
+    mac = _bullets(an.get("macro_data"))
+    if rel or mac or mfacts:
+        B.append(_h2("Macro data", extras.get("macro_sub", "released prints: actual vs consensus")))
+        B.append(_box(mfacts + _released_table(rel) + mac + _links(by_group.get("Macro data", []), limit=3)))
+    # Global
+    glo = _bullets(an.get("global"))
+    if glo:
+        B.append(_h2("Global news & impact"))
+        B.append(_box(glo + _links(by_group.get("Global", []), limit=3)))
+    # Sectors
+    secs = an.get("sectors") or []
+    moves = {r["symbol"]: r for r in (extras.get("sector_moves") or [])}
+    theme_etf = extras.get("theme_etf") or {}
+    if secs or moves:
+        B.append(_h2("Sectors", "only sectors with news in the window"))
+        B.append(_sector_table(extras.get("sector_moves"), extras.get("sector_table_label", "Sector ETF"),
+                               extras.get("sector_cols", ("1 day", "5 days"))))
+        for sec in secs:
+            th = sec.get("theme", "")
+            mv = moves.get(theme_etf.get(th))
+            mtxt = (f' <span style="font-size:13px">{_esc(mv["symbol"]) if mv["symbol"] != th else ""} '
+                    f'{_pct(mv["pct_1d"])}</span>' if mv and mv.get("pct_1d") is not None else "")
+            B.append(_box(f'<table style="width:100%;border-collapse:collapse"><tr><td style="font-size:16px;font-weight:700">'
+                          f'{_esc(th)}{mtxt}</td><td style="text-align:right">{_sent_pill(sec.get("call"))}</td></tr></table>'
+                          + _bullets(sec.get("points"), limit=3)
+                          + _links(by_group.get(th, []), label="Headlines" if sec.get("headlines_only") else "Sources",
+                                   limit=4 if sec.get("headlines_only") else 3)))
+    # Stocks to watch (≤3)
+    picks = an.get("stocks_to_watch") or []
+    if picks:
+        sub = "at most three, each with a named catalyst; buy/sell calls carry a Catalyst Thesis"
+        if extras.get("shariah"):
+            sub += extras.get("shariah_sub", " · Shariah-screened")
+        B.append(_h2("Stocks to watch", sub))
+        for p in picks:
+            B.append(_pick_card(p, funds, extras, by_group))
+    # Crypto
+    crypto = extras.get("crypto") or {}
+    ch = an.get("crypto") or {}
+    snaps = crypto.get("snapshot") or []
+    if snaps:
+        ai = {c.get("symbol"): c for c in (ch.get("coins") or []) if isinstance(c, dict)}
+        rows = "".join(
+            f'<tr><td style="padding:4px 8px 4px 0;font-weight:700;font-size:14px">{_esc(c["symbol"])}</td>'
+            f'<td style="padding:4px 8px;text-align:right;font-size:14px">{c["price"]:,.2f}</td>'
+            f'<td style="padding:4px 8px;text-align:right;font-size:14px">{_pct(c.get("pct"))}</td>'
+            f'<td style="padding:4px 8px;text-align:right;font-size:13px">{_pct(c.get("pct7d"), bold=False)}</td>'
+            f'<td style="padding:4px 0 4px 8px;text-align:right">{_call_pill(ai[c["symbol"]].get("call"), big=False) if ai.get(c["symbol"], {}).get("call") else ""}</td></tr>'
+            for c in snaps)
+        head = ('<tr style="color:#80868b;font-size:12px;text-transform:uppercase"><td>Coin</td><td style="text-align:right">Price</td>'
+                '<td style="text-align:right">1d</td><td style="text-align:right">7d</td><td></td></tr>')
+        B.append(_h2("Crypto", "major coins"))
+        B.append(_box(f'<table style="width:100%;border-collapse:collapse">{head}{rows}</table>'
+                      + _bullets(ch.get("points"), limit=3) + _links(by_group.get("Crypto", []), limit=3)))
+    # Calendar
+    up = cal.get("upcoming") or []
+    if up:
+        B.append(_h2("Coming up — exact dates", extras.get("calendar_sub") or
+                     f"next {extras.get('calendar_days', 14)} days · times in New York (ET) and Hong Kong"))
+        B.append(_box(_calendar_table(up, fmt_when, note=extras.get("calendar_note", "")), bg="#ffffff"))
+    risks = _pts(an.get("risks"))
+    if risks:
+        B.append(_h2("Risks to watch"))
+        B.append(_bullets(risks, limit=5))
+    tr = extras.get("track_record") or []
+    if tr:
+        rows = "".join(
+            f'<tr><td style="padding:3px 8px 3px 0;font-size:14px"><b>{_esc(r["ticker"])}</b> '
+            f'<span style="color:#9aa0a6;font-size:12px">{_esc(r["date"][5:])}</span></td>'
+            f'<td style="padding:3px 8px;font-size:13px">{_call_pill("watch" if r["call"] in ("hold", "") else r["call"], big=False)}</td>'
+            f'<td style="padding:3px 8px;text-align:right;font-size:14px">{_num(r["price"])} → {_num(r.get("now"))}</td>'
+            f'<td style="padding:3px 0 3px 8px;text-align:right">{_pct(r.get("pct"))}</td></tr>' for r in tr)
+        B.append(_h2("Recent picks — since flagged"))
+        B.append(_box(f'<table style="width:100%;border-collapse:collapse">{rows}</table>'
+                      '<div style="font-size:12px;color:#9aa0a6;margin-top:4px">Price move since the day it was flagged — '
+                      'a running scorecard, not a recommendation.</div>'))
+    html_body = _wrap(f"{flag} Market Digest {region}", today, extras.get("period_label", ""), _banner(status),
+                      "".join(B), _footer(extras.get("footer_sources", "")))
+    T = [f"MARKET DIGEST {region} — {today}", extras.get("period_label", ""), ""]
+    T += [f"- {t}" for t in tldr]
+    for title, key in (("POLICY & RATES", "policy_rates"), ("MACRO DATA", "macro_data"), ("GLOBAL", "global")):
+        pts = _pts(an.get(key))
+        if pts:
+            T += ["", title] + [f"- {p}" for p in pts]
+    for sec in secs:
+        T += ["", f"{sec.get('theme')} [{(sec.get('call') or '').upper()}]"] + [f"- {p}" for p in _pts(sec.get("points"))]
+    if picks:
+        T += ["", "STOCKS TO WATCH"]
+        for p in picks:
+            v = ((p.get("debate") or {}).get("verdict") or {})
+            T.append(f"{p['ticker']}: {(v.get('call') or 'watch').upper()} — catalyst: {p.get('catalyst')}")
+    if up:
+        T += ["", "COMING UP"] + [f"{fmt_when(e['when'], e.get('timed', True))}  {e['label']}" for e in up]
+    return subject, html_body, "\n".join(T)

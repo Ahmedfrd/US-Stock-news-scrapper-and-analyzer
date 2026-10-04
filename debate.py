@@ -1,221 +1,228 @@
 """
-debate.py — three-layer "researcher debate" for a single name.
+debate.py — bull / bear / judge, kept SHORT: pointers, not essays.
 
-Inspired by the TradingAgents framework (Xiao et al., UCLA/MIT): rather than
-asking one model to weigh both sides, two models are forced to advocate opposite
-positions and a third synthesises a judgement. We run it single-round to stay
-inside free tiers, and spread the three roles across providers for both quota
-and genuine model diversity (uncorrelated reasoning):
+Inspired by the TradingAgents framework (Xiao et al.): two models argue opposite
+sides and a third forms its own view. Single round, roles spread across free
+providers (bull → Groq, bear → OpenRouter, judge → Gemini), each with a fallback
+through every other available provider.
 
-    BULL  → Groq         (strongest evidence-based bull case)
-    BEAR  → OpenRouter   (strongest evidence-based bear case)
-    JUDGE → Gemini       (reads both + the data, issues the call)
-
-Every role reads the SAME evidence: fundamentals, technicals, news, and crowd
-sentiment. Providers are chosen from whatever keys exist; if only one provider
-is available all three roles use it (still useful — different prompts). Any role
-that errors degrades gracefully, and the whole thing is a no-op if debate is off
-or no AI key is present.
+Two flavours:
+  * HOLDINGS (weekly Portfolio Digest): every role reads the WEEK — this week's
+    news, the day-by-day price progression, results — plus last week's verdict
+    from state, so the cases move with the stock instead of repeating the same
+    long-term boilerplate every week.
+  * STOCKS TO WATCH (daily Market Digest): the judge must also write a Catalyst
+    Thesis whenever it recommends buying or selling; the figures in it are
+    computed by thesis.py, never by the model.
 """
 
 from __future__ import annotations
 
+import re
+
 import providers
 import analyzer as _analyzer
+import thesis as thesis_mod
 
-# Default role→provider assignment (overridable via analysis.debate_providers).
 _DEFAULT_ROLES = {"bull": "groq", "bear": "openrouter", "judge": "gemini"}
 
-_BULL_SYS = (
-    "You are a BULL-side equity researcher. Build the STRONGEST evidence-based "
-    "case FOR this security using only the data provided (fundamentals, technicals, "
-    "news, crowd sentiment). Cite concrete figures and cross-check facts and figures. 4-6 tight bullet points. Be "
-    "persuasive but honest — no invented numbers. This is advocacy, not a balanced view."
-)
-_BEAR_SYS = (
-    "You are a BEAR-side equity researcher. Build the STRONGEST evidence-based case "
-    "AGAINST this security (or for caution) using only the data provided. Surface "
-    "risks, weak fundamentals, technical warnings, negative catalysts, valuation and "
-    "sentiment concerns. Cite concrete figures. 4-6 tight bullet points. No invented numbers."
-)
-_JUDGE_SYS = (
-    "You are the JUDGE — a senior portfolio manager. You have just read a BULL analyst "
-    "and a BEAR analyst, plus the underlying evidence. Do NOT score the debate or pick a "
-    "winner ('the bear cited better numbers, so bear wins'). Instead, READ both cases, "
-    "then form YOUR OWN independent thesis on this security: take the strongest valid "
-    "points from each side, add the fundamentals, earnings and news catalysts, and reason "
-    "through anything neither analyst raised. You may reach a conclusion that neither the "
-    "bull nor the bear argued — that is welcome. "
-    "Base your call ONLY on CATALYSTS, FUNDAMENTALS, EARNINGS and NEWS — the real drivers "
-    "of the business and the stock's story but focus more on Catalysts. IGNORE all technical indicators (RSI, MACD, "
-    "moving averages, price-vs-SMA, support/resistance, chart 'signals'); if either "
-    "analyst leaned on technicals, disregard that part of their case. A move's technicals "
-    "are noise here — the WHY behind the fundamentals and news is what matters. "
-    "Your verdict must read as your OWN reasoned view of the name (its catalysts and "
-    "fundamentals), NOT as 'which analyst won'. Respond ONLY with JSON, no prose:\n"
-    "{\"call\":\"buy|accumulate|hold|reduce|sell|avoid\","
-    "\"conviction\":\"low|medium|high\","
-    "\"verdict\":\"2-3 sentences in YOUR voice: your thesis on the name, grounded in the "
-    "catalysts/news/fundamentals that drive it — not a summary of who won the debate\","
-    "\"key_risks\":[\"the 1-3 risks that matter most — fundamental/news-driven, not technical\"],"
-    "\"what_would_change_it\":\"one line: the catalyst/event/fundamental datapoint that would flip your call\","
-    "\"start_here\":\"one line: what the reader should investigate first\"}"
-)
+_POINTER_RULES = (
+    "Write EXACTLY 3 bullet lines, each starting with '- ', each at most 22 words, each "
+    "making ONE point anchored in a concrete fact or figure from the data (this period's "
+    "news, the price progression, results, a valuation number). No preamble, no headings, "
+    "no conclusion line. Never write a point that would be equally true of any stock "
+    "('strong brand', 'market volatility', 'macro uncertainty'). Use only the data given — "
+    "never invent numbers.")
+
+_BULL_SYS = ("You are the BULL analyst. Make the strongest evidence-based case FOR this "
+             "security. " + _POINTER_RULES)
+_BEAR_SYS = ("You are the BEAR analyst. Make the strongest evidence-based case AGAINST this "
+             "security (or for caution). " + _POINTER_RULES)
+
+_JUDGE_CORE = (
+    "You are the JUDGE, a senior portfolio manager. Read the bull and bear pointers and the "
+    "evidence, then form YOUR OWN view — do not score the debate. Weigh catalysts, news, "
+    "results and fundamentals first; use the price progression as evidence of how the "
+    "market is receiving the story, but never base the call on indicator signals "
+    "(RSI/MACD/moving-average crossovers). Keep it short: pointers, not paragraphs. "
+    "Respond ONLY with JSON, no prose.")
+
+_JUDGE_HOLDING = _JUDGE_CORE + (
+    " This is the WEEKLY review of a name the reader OWNS. Your pointers must be about what "
+    "happened THIS WEEK and where the stock stands now — if last week's verdict is given, "
+    "say plainly what changed (or that nothing material did).\n"
+    '{"call":"buy|accumulate|hold|reduce|sell",'
+    '"conviction":"low|medium|high",'
+    '"pointers":["2-3 bullets, max 22 words each: why, anchored in this week"],'
+    '"changed_since_last_week":"one line, max 25 words (\'first weekly review\' if no prior verdict)",'
+    '"key_risk":"one line, max 20 words",'
+    '"what_would_change_it":"one line, max 20 words: the specific event/datapoint"}')
+
+_JUDGE_PICK = _JUDGE_CORE + (
+    " This is a STOCK TO WATCH the reader does not own, flagged because of a specific "
+    "catalyst. If your call is buy, accumulate, sell, reduce or avoid you MUST include a "
+    "complete catalyst thesis; if the evidence cannot support one, the call must be 'hold'. "
+    "Conviction may not be 'high' (one session of news on a new name). Use the COMPUTED "
+    "FIGURES as given; never introduce other price levels or targets.\n"
+    '{"call":"buy|accumulate|hold|reduce|sell|avoid",'
+    '"conviction":"low|medium",'
+    '"pointers":["2-3 bullets, max 22 words each"],'
+    '"key_risk":"one line, max 20 words",'
+    '"what_would_change_it":"one line, max 20 words",'
+    '"thesis":{"catalyst":"the specific event (and its date if scheduled), max 30 words",'
+    '"mechanism":"how it reaches revenue/earnings or the share price, max 35 words",'
+    '"priced_in":"what the price already reflects, reasoned from the computed figures, max 30 words",'
+    '"horizon":"days|weeks|quarter",'
+    '"invalidation":"the concrete observable that proves it wrong (may cite the computed support/resistance), max 30 words",'
+    '"before_acting":"what to verify first, max 25 words"}}')
+
 _SINGLE_SYS = (
-    "You are a senior fund analyst issuing an RESEARCH read on a fund/ETF "
-    ", using only the data provided (holdings, "
-    "flows, technicals, crowd sentiment, news). This is a direct assessment, not a "
-    "debate — weigh the evidence yourself and give a balanced, evidence-based call. "
-    "Cite concrete figures. Respond ONLY with JSON, no prose:\n"
-    "{\"call\":\"buy|accumulate|hold|reduce|sell|avoid\","
-    "\"conviction\":\"low|medium|high\","
-    "\"verdict\":\"2-3 sentences: your read and why, citing figures\","
-    "\"key_risks\":[\"the 1-3 risks that matter most\"],"
-    "\"what_would_change_it\":\"one line: the datapoint/event that would flip the call\","
-    "\"start_here\":\"one line: what the reader should investigate first\"}"
-)
+    "You are a senior fund analyst giving the WEEKLY read on a fund/ETF the reader owns, from "
+    "the data provided (holdings and their news, flows, returns, the week's price "
+    "progression). Short pointers, not paragraphs; anchor them in THIS WEEK. Respond ONLY "
+    "with JSON:\n"
+    '{"call":"buy|accumulate|hold|reduce|sell",'
+    '"conviction":"low|medium|high",'
+    '"pointers":["2-3 bullets, max 22 words each"],'
+    '"changed_since_last_week":"one line, max 25 words (\'first weekly review\' if no prior verdict)",'
+    '"key_risk":"one line, max 20 words",'
+    '"what_would_change_it":"one line, max 20 words"}')
 
 
 def _pick_roles(config: dict) -> dict | None:
-    explicit = (config.get("analysis") or {}).get("debate_providers")
-    avail = [p for p in ["groq", "openrouter", "gemini"] if providers.available(p)]
-    if explicit:  # user-specified, but keep only those with keys
-        picked = {r: explicit.get(r) for r in ("bull", "bear", "judge")}
-        picked = {r: p for r, p in picked.items() if p and providers.available(p)}
-        if len(picked) == 3:
-            return picked
+    avail = [p for p in ("groq", "openrouter", "gemini") if providers.available(p)]
     if not avail:
         return None
-    # distinct providers where possible, else reuse what's available
-    bull = "groq" if "groq" in avail else avail[0]
-    bear = "openrouter" if "openrouter" in avail else (avail[1] if len(avail) > 1 else avail[0])
-    judge = "gemini" if "gemini" in avail else avail[-1]
-    return {"bull": bull, "bear": bear, "judge": judge}
+    explicit = (config.get("analysis") or {}).get("debate_providers") or {}
+    roles = {}
+    for r in ("bull", "bear", "judge"):
+        pref = (explicit.get(r) or _DEFAULT_ROLES[r]).lower()
+        roles[r] = pref if providers.available(pref) else avail[0]
+    return roles
 
 
-def build_context(ticker, name, fund, tech, crowd_entry, news_items, prior=None) -> str:
-    """Compact per-name evidence block shared by all three roles."""
+def build_context(ticker, name, fund, tech, crowd_entry, news_items, prog_text="",
+                  prior=None, crowd_label="Adanos") -> str:
+    """Evidence block shared by all three roles."""
     L = [f"SECURITY: {ticker} ({name})"]
     if fund and not getattr(fund, "error", None):
-        # Reuse the EXACT same formatter as the main analysis context (analyzer._fund_block)
-        # so bull/bear/judge see byte-identical figures to what the primary analysis used —
-        # a separate hand-rolled formatter here previously mismatched units (e.g. net margin
-        # shown as a raw fraction + "%" instead of ×100), causing bull/bear/judge to argue
-        # over "misstated" numbers that were actually a formatting bug, not a real dispute.
         L.append("FUNDAMENTALS:\n" + _analyzer._fund_block(fund))
-        if getattr(fund, "market_cap", None):
-            L.append(f"MARKET CAP: {_analyzer._money(fund.market_cap)}")
+    if prog_text:
+        L.append(prog_text)
     if tech and not getattr(tech, "error", None):
-        L.append("TECHNICALS: " + ", ".join(filter(None, [
+        L.append("TECHNICALS (context only): " + ", ".join(filter(None, [
             f"RSI {tech.rsi}" if tech.rsi is not None else "",
-            f"MACD hist {tech.macd_hist}" if tech.macd_hist is not None else "",
-            f"trend {tech.trend}" if getattr(tech, "trend", None) else "",
-            f"vs SMA50 {tech.sma50}" if getattr(tech, "sma50", None) else "",
-            f"vs SMA200 {tech.sma200}" if getattr(tech, "sma200", None) else "",
-            f"support {tech.support}" if getattr(tech, "support", None) else "",
-            f"resistance {tech.resistance}" if getattr(tech, "resistance", None) else "",
-            f"rule-signal {tech.signal}" if getattr(tech, "signal", None) else "",
-        ])))
+            f"trend {tech.trend}" if tech.trend else "",
+            f"SMA50 {tech.sma50}" if tech.sma50 else "",
+            f"SMA200 {tech.sma200}" if tech.sma200 else "",
+            f"support {tech.support}" if tech.support else "",
+            f"resistance {tech.resistance}" if tech.resistance else ""])))
     if crowd_entry and crowd_entry.get("has_data"):
         con = crowd_entry.get("consensus", {})
-        L.append(f"CROWD SENTIMENT (Adanos consensus): {con.get('label')} "
-                 f"({con.get('bullish')}% bull / {con.get('bearish')}% bear, buzz {con.get('buzz')})")
+        L.append(f"CROWD ({crowd_label}): {con.get('label')} ({con.get('bullish')}% bull / "
+                 f"{con.get('bearish')}% bear)")
     if news_items:
-        L.append("RECENT NEWS (full article content where available — read it for the "
-                 "actual reason behind any move, not just the headline):")
+        L.append("NEWS (article text where available — use the substance, not the headline):")
         for it in news_items[:6]:
-            summ = (getattr(it, "summary", "") or "")[:1400]
-            L.append(f"  - {it.title} [{it.source}]\n    {summ}")
+            summ = (getattr(it, "summary", "") or "")[:1200]
+            when = it.published.strftime("%a %d %b") if getattr(it, "published", None) else ""
+            L.append(f"  - [{when}] {it.title} [{it.source}]\n    {summ}")
+    else:
+        L.append("NEWS: no company-specific articles in this period.")
     if prior:
-        if prior.get("news_impact"):
-            L.append(f"PRIOR ANALYST NOTE (impact): {prior['news_impact']}")
+        L.append(f"LAST WEEK'S VERDICT ({prior.get('date')}): {str(prior.get('call', '')).upper()} "
+                 f"({prior.get('conviction', '')} conviction) at {prior.get('price')}; pointers then: "
+                 + " | ".join(prior.get("pointers") or []))
     return "\n".join(L)
 
 
-def _fallback_chain(primary):
-    """Try the assigned provider first, then EVERY other available provider as a
-    backup, so a rate-limited or failed call still gets answered instead of
-    dropping to the canned 'unavailable' text.
-
-    Ordering is deliberate: after the primary we try groq → openrouter → gemini,
-    which keeps Gemini LAST for the bull/bear advocacy roles. Groq and OpenRouter
-    are the priority engines for the debate; Gemini's tight free-tier quota is
-    reserved for its own role (the judge) and used only as a last resort for the
-    others. The judge (primary=gemini) still gets groq/openrouter behind it."""
-    order = [primary, "groq", "openrouter", "gemini"]
-    chain = []
-    for p in order:
-        if p and p not in chain and providers.available(p):
-            chain.append(p)
-    return chain or [primary]
-
-
-def _call(role, provider, sysmsg, ctx, task, ticker=""):
-    """Run one advocacy role. Tries the assigned provider, then any other
-    available provider; logs the real error to the run log and never leaks a
-    raw error string into the report."""
-    for prov in _fallback_chain(provider):
-        try:
-            # Prose output — json_mode must stay off: Groq returns HTTP 400 on
-            # JSON mode when the prompt doesn't ask for JSON, which silently
-            # killed every bull/bear call.
-            return providers.complete(prov, sysmsg, f"{ctx}\n\nTASK: {task}",
-                                      json_mode=False).strip()
-        except Exception as e:  # noqa: BLE001
-            print(f"[debate] {role} for {ticker} via {prov} failed: {e}", flush=True)
-    return (f"({role} case unavailable this run — all AI providers failed or were "
-            f"rate-limited; details in the run log)")
+def _pointers(text, n=3) -> list[str]:
+    """Model prose → at most n clean one-line pointers."""
+    if isinstance(text, list):
+        lines = [str(x) for x in text]
+    else:
+        lines = str(text or "").splitlines()
+    out = []
+    for ln in lines:
+        ln = re.sub(r"^\s*(?:[-*•–·]|\d+[.)])\s*", "", ln).strip().strip('"')
+        ln = re.sub(r"\*\*(.+?)\*\*", r"\1", ln)
+        if len(ln) < 8 or ln.endswith(":") or ln.lower().startswith(("bull case", "bear case", "here are")):
+            continue
+        out.append(ln[:240])
+        if len(out) >= n:
+            break
+    return out
 
 
-def run(ticker, name, ctx, config) -> dict | None:
+def _call_role(role, provider, sysmsg, ctx, task, ticker):
+    try:
+        text, used = providers.complete_chain([provider], sysmsg, f"{ctx}\n\nTASK: {task}",
+                                              json_mode=False)
+        return _pointers(text), used
+    except Exception as e:  # noqa: BLE001
+        print(f"[debate] {role} for {ticker} failed on every provider: {str(e)[:200]}", flush=True)
+        return [], None
+
+
+def _judge(sysmsg, ctx, task, primary, ticker):
+    try:
+        raw, used = providers.complete_chain([primary], sysmsg, f"{ctx}\n\nTASK: {task}")
+        v = providers.normalize_text_fields(providers.parse_json(raw))
+        v["pointers"] = _pointers(v.get("pointers"), 3)
+        return v, used
+    except Exception as e:  # noqa: BLE001
+        print(f"[debate] judge for {ticker} failed on every provider: {str(e)[:200]}", flush=True)
+        return {}, None
+
+
+def run_holding(ticker, name, ctx, config, is_fund=False) -> dict | None:
     roles = _pick_roles(config)
     if not roles:
         return None
-    bull = _call("bull", roles["bull"], _BULL_SYS, ctx,
-                 f"Make the bull case for {ticker}.", ticker)
-    bear = _call("bear", roles["bear"], _BEAR_SYS, ctx,
-                 f"Make the bear case for {ticker}.", ticker)
-    judge_ctx = (f"{ctx}\n\n=== BULL ANALYST ===\n{bull}\n\n=== BEAR ANALYST ===\n{bear}")
-    verdict = {}
-    for prov in _fallback_chain(roles["judge"]):
-        try:
-            raw = providers.complete(prov, _JUDGE_SYS, judge_ctx +
-                                     f"\n\nTASK: Judge {ticker} and return the JSON.")
-            verdict = providers.normalize_text_fields(providers.parse_json(raw))
-            break
-        except Exception as e:  # noqa: BLE001
-            print(f"[debate] judge for {ticker} via {prov} failed: {e}", flush=True)
-    if not verdict.get("call"):
-        verdict = {"call": "hold", "conviction": "low",
-                   "verdict": "Judge unavailable this run (provider errors — see the run "
-                              "log); read the bull/bear cases below.",
-                   "key_risks": [], "what_would_change_it": "", "start_here": ""}
-    return {"bull": bull, "bear": bear, "verdict": verdict, "roles": roles, "mode": "debate"}
+    if is_fund:
+        v, used = _judge(_SINGLE_SYS, ctx, f"Give the weekly read on {ticker} as JSON.",
+                         roles["judge"], ticker)
+        return {"bull": [], "bear": [], "verdict": v, "roles": {"judge": used}, "mode": "single"} \
+            if v.get("call") else None
+    bull, bu = _call_role("bull", roles["bull"], _BULL_SYS, ctx,
+                          f"Bull pointers for {ticker}, based on this week.", ticker)
+    bear, be = _call_role("bear", roles["bear"], _BEAR_SYS, ctx,
+                          f"Bear pointers for {ticker}, based on this week.", ticker)
+    jctx = (f"{ctx}\n\n=== BULL ===\n" + "\n".join(f"- {b}" for b in bull)
+            + "\n\n=== BEAR ===\n" + "\n".join(f"- {b}" for b in bear))
+    v, ju = _judge(_JUDGE_HOLDING, jctx, f"Weekly verdict on {ticker} as JSON.", roles["judge"], ticker)
+    if not (v.get("call") or bull or bear):
+        return None
+    return {"bull": bull, "bear": bear, "verdict": v, "mode": "debate",
+            "roles": {"bull": bu, "bear": be, "judge": ju}}
 
 
-def run_single(ticker, name, ctx, config) -> dict | None:
-    """ETFs/funds get one direct verdict call instead of the 3-role bull/bear/judge
-    debate — a fund's news rarely supports a real adversarial case, and skipping
-    two of the three calls saves meaningful free-tier budget for the stocks that
-    do warrant a debate. Still falls back through every available provider."""
+def run_pick(ticker, name, ctx, computed: dict, config) -> dict | None:
     roles = _pick_roles(config)
     if not roles:
         return None
-    primary = roles["judge"]
-    verdict, used = {}, primary
-    for prov in _fallback_chain(primary):
-        try:
-            raw = providers.complete(prov, _SINGLE_SYS,
-                                     f"{ctx}\n\nTASK: Assess {ticker} and return the JSON.")
-            verdict = providers.normalize_text_fields(providers.parse_json(raw))
-            used = prov
-            break
-        except Exception as e:  # noqa: BLE001
-            print(f"[debate] single-call verdict for {ticker} via {prov} failed: {e}", flush=True)
-    if not verdict.get("call"):
-        verdict = {"call": "hold", "conviction": "low",
-                   "verdict": "Verdict unavailable this run (all AI providers failed or "
-                              "were rate-limited; details in the run log).",
-                   "key_risks": [], "what_would_change_it": "", "start_here": ""}
-    return {"bull": "", "bear": "", "verdict": verdict,
-            "roles": {"judge": used}, "mode": "single"}
+    ctx = ctx + "\n" + thesis_mod.describe(computed)
+    bull, bu = _call_role("bull", roles["bull"], _BULL_SYS, ctx, f"Bull pointers for {ticker}.", ticker)
+    bear, be = _call_role("bear", roles["bear"], _BEAR_SYS, ctx, f"Bear pointers for {ticker}.", ticker)
+    jctx = (f"{ctx}\n\n=== BULL ===\n" + "\n".join(f"- {b}" for b in bull)
+            + "\n\n=== BEAR ===\n" + "\n".join(f"- {b}" for b in bear))
+    v, ju = _judge(_JUDGE_PICK, jctx, f"Verdict and (if directional) catalyst thesis for {ticker} as JSON.",
+                   roles["judge"], ticker)
+    if not v.get("call"):
+        return {"bull": bull, "bear": bear, "verdict": {}, "mode": "debate",
+                "roles": {"bull": bu, "bear": be, "judge": ju}} if (bull or bear) else None
+    # Guard-rails the prompt cannot enforce on its own.
+    if (v.get("conviction") or "").lower() == "high":
+        v["conviction"] = "medium"
+    th = v.get("thesis") if isinstance(v.get("thesis"), dict) else None
+    if thesis_mod.is_directional(v.get("call")):
+        ok, problems = thesis_mod.validate(th)
+        if not ok:
+            print(f"[debate] {ticker}: {v.get('call')} withheld — thesis incomplete ({', '.join(problems)})")
+            v["withheld_call"] = v.get("call")
+            v["call"] = "hold"
+            v["thesis"] = None
+    else:
+        v["thesis"] = None
+    return {"bull": bull, "bear": bear, "verdict": v, "mode": "debate",
+            "roles": {"bull": bu, "bear": be, "judge": ju}}

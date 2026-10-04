@@ -181,7 +181,8 @@ def fetch(ticker: str, name: str = "") -> Fundamentals:
         except Exception:
             info = {}
 
-        f.name = _get(info, "shortName", "longName") or f.name
+        # longName first: shortName is often truncated ("Equity Lifestyle Properties, In")
+        f.name = _get(info, "longName", "shortName") or f.name
         f.sector = info.get("sector", "") or ""
         f.industry = info.get("industry", "") or ""
         f.currency = (info.get("currency") or "").upper()

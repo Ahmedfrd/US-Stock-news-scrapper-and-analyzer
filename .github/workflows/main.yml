@@ -1,35 +1,59 @@
 name: Market Digest (off-machine)
 
-# Runs 07:00 Hong Kong time, Mon-Sat (23:00 UTC the previous day: Sun-Fri UTC).
-# HK is UTC+8, so 23:00 UTC on days 0-5 (Sun-Fri) = 07:00 HK on Mon-Sat. Each
-# run scrapes the previous ~24h of news (sources.lookback_hours), i.e. yesterday's
-# session — e.g. Tue 07:00 HK captures Monday's US close (Mon 20:00 UTC, ~3h
-# earlier); the Saturday run captures Friday's US session. Both reports go out
-# every run by default; set market_digest_day in config.yaml to a UTC weekday to
-# make the Market Digest weekly. Manual "Run workflow" runs always produce BOTH
-# reports. GitHub cron is UTC. Nothing runs on your own computer.
+# Runs 07:00 Hong Kong time, Mon–Sat (23:00 UTC the previous day, Sun–Fri UTC).
+#   * Market Digest US    — EVERY scheduled run: news since the previous email
+#                           (Monday's edition covers the whole weekend).
+#   * Portfolio Digest US — WEEKLY, on schedule.portfolio_day in config.yaml
+#                           (default Sat = right after Friday's US close).
+# Manual "Run workflow" runs let you pick the report and a dry run (dry run =
+# build the HTML as a downloadable artifact, send nothing, save no state).
+# GitHub cron is UTC and can start late; the news window is anchored to where
+# the previous scheduled email stopped (state/state.json), so delays never
+# create gaps or repeats.
 on:
   schedule:
     - cron: "0 23 * * 0-5"
-  workflow_dispatch: {}          # manual "Run workflow" button in the Actions tab
+  workflow_dispatch:
+    inputs:
+      report:
+        description: "Which email(s)"
+        type: choice
+        options: [both, market, portfolio, auto]
+        default: both
+      dry_run:
+        description: "Dry run — build only, send nothing"
+        type: boolean
+        default: false
+
+concurrency:
+  group: market-digest-us
+  cancel-in-progress: false
+
+permissions:
+  contents: write          # state/state.json is committed back after each run
 
 jobs:
   digest:
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
       - run: pip install -r requirements.txt
       - name: Run digest
         env:
+          REPORT:             ${{ github.event.inputs.report || 'auto' }}
+          DRY_RUN:            ${{ github.event.inputs.dry_run || 'false' }}
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2:   ${{ secrets.GEMINI_API_KEY_2 }}
           GEMINI_API_KEY_3:   ${{ secrets.GEMINI_API_KEY_3 }}
           GROQ_API_KEY:       ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           FINNHUB_API_KEY:    ${{ secrets.FINNHUB_API_KEY }}
+          MARKETAUX_API_KEY:  ${{ secrets.MARKETAUX_API_KEY }}
           ADANOS_API_KEY:     ${{ secrets.ADANOS_API_KEY }}
           SEC_USER_AGENT:     ${{ secrets.SEC_USER_AGENT }}
           EMAIL_PASSWORD:     ${{ secrets.EMAIL_PASSWORD }}
@@ -37,8 +61,24 @@ jobs:
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python main.py
 
-      # Makes the finished report downloadable from the run page — handy for
-      # testing before (or instead of) email/Telegram delivery.
+      # Run-to-run memory (last week's verdicts, the market news window, recent
+      # picks). Committed rather than cached so it has auditable history.
+      - name: Persist state
+        if: always() && github.event.inputs.dry_run != 'true'
+        run: |
+          if [ -n "$(git status --porcelain state/)" ]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state/
+            git commit -m "state: digest run $(date -u +%Y-%m-%dT%H:%MZ)"
+            git pull --rebase --autostash || true
+            git push || echo "state push failed (non-fatal)"
+          else
+            echo "no state change"
+          fi
+
+      # The finished HTML, downloadable from the run page — check output here
+      # instead of triggering extra runs (each one burns free-tier LLM quota).
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4

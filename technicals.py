@@ -114,15 +114,24 @@ def compute_from_closes(ticker: str, close, volumes=None) -> Technicals:
 
 
 def compute(ticker: str) -> Technicals:
+    """Technicals for a symbol from its (cached) 1-year daily bars."""
+    try:
+        import prices
+        hist = prices.history(ticker, "1y")
+    except Exception:  # noqa: BLE001
+        hist = None
+    return compute_from_ohlc(ticker, hist)
+
+
+def compute_from_ohlc(ticker: str, hist) -> Technicals:
+    """Technicals from a daily OHLCV DataFrame (yfinance shape)."""
     t = Technicals(ticker=ticker)
     try:
-        import yfinance as yf
-        import pandas as pd  # noqa
+        import pandas as pd
     except ImportError:
-        t.error = "yfinance/pandas not installed"
+        t.error = "pandas not installed"
         return t
     try:
-        hist = yf.Ticker(ticker).history(period="1y")
         if hist is None or hist.empty:
             t.error = "no price history"
             return t
