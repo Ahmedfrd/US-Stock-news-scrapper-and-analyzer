@@ -141,7 +141,7 @@ def _pointers(text, n=3) -> list[str]:
     if isinstance(text, list):
         lines = [str(x) for x in text]
     else:
-        lines = str(text or "").splitlines()
+        lines = _analyzer.split_bullets(text)
     out = []
     for ln in lines:
         ln = re.sub(r"^\s*(?:[-*•–·]|\d+[.)])\s*", "", ln).strip().strip('"')

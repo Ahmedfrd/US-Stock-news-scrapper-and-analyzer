@@ -82,6 +82,18 @@ def _flags_line(flags):
     return " | ".join(one(fl) for fl in (flags or []))
 
 
+def split_bullets(text: str) -> list[str]:
+    """Newline bullets, or — when a model crams them onto one line — split on the
+    ' - ' separators ('- A did x - B did y')."""
+    import re as _re
+    lines = [l for l in str(text or "").splitlines() if l.strip()]
+    if len(lines) == 1 and lines[0].lstrip().startswith("- ") and lines[0].count(" - ") >= 1:
+        parts = _re.split(r"\s+-\s+(?=[A-Z0-9$(“\"'])", lines[0].strip()[2:])
+        if len(parts) > 1:
+            return ["- " + p.strip() for p in parts if p.strip()]
+    return lines
+
+
 _FMT_RULE = ("FORMAT: every multi-point text field is newline-separated bullet lines, each "
              "starting with '- ', one point per line, leading with the reason, then the "
              "figures. Short and specific — no filler.")
@@ -94,7 +106,10 @@ _WHY_RULE = (
     "unclear. Use ONLY the data provided; never invent numbers or news.")
 
 
-def _run_chain(system, user, config, label):
+def _run_chain(system, build_user, config, label):
+    """build_user(compact: bool) -> prompt. Providers with a small request cap get
+    the COMPACT prompt (shorter snippets spread across every name) instead of a
+    full prompt cut off at the tail — a tail cut drops whole holdings."""
     acfg = config.get("analysis", {}) or {}
     status = {"engine": "heuristic", "ok": False, "reason": "", "attempts": []}
     if not acfg.get("enabled", True):
@@ -111,6 +126,10 @@ def _run_chain(system, user, config, label):
             status["attempts"].append(f"{prov}: no API key")
             continue
         model = acfg.get("model") if prov == acfg.get("provider", "gemini") else None
+        user = build_user(False)
+        cap = providers.user_cap(prov)
+        if cap and len(user) > cap:
+            user = build_user(True)
         try:
             raw = providers.complete(prov, system, user, model)
             data = providers.normalize_text_fields(providers.parse_json(raw))
@@ -139,7 +158,8 @@ PORTFOLIO_SYSTEM = (
     + _WHY_RULE + " " + _FMT_RULE + " Informational analysis, not investment advice.")
 
 
-def _portfolio_context(items, funds, extras, watchlist) -> str:
+def _portfolio_context(items, funds, extras, watchlist, compact=False) -> str:
+    a_cap, a_snip, c_cap, c_snip, f_snip = (4, 260, 1, 160, 300) if compact else (10, 1500, 3, 1000, 1800)
     by_group = defaultdict(list)
     for it in items:
         by_group[it.group].append(it)
@@ -170,7 +190,7 @@ def _portfolio_context(items, funds, extras, watchlist) -> str:
                            "entry per company listed here, and ONLY these) ---")
                 for sym, arts in hn.items():
                     out.append(f"  COMPONENT {sym}:")
-                    out += _arts(arts, 3, 1000)
+                    out += _arts(arts, c_cap, c_snip)
         elif f:
             out.append(_fund_block(f))
         if prog_txt.get(tk):
@@ -185,7 +205,7 @@ def _portfolio_context(items, funds, extras, watchlist) -> str:
             out.append(f"  NEXT EARNINGS {u.get('date')} ({u.get('days_away')}d)")
         fil = fils.get(tk)
         if fil and fil.get("excerpt"):
-            out.append(f"  SEC FILING {fil['form']} filed {fil['filed']} — excerpt: \"{fil['excerpt'][:1800]}\"")
+            out.append(f"  SEC FILING {fil['form']} filed {fil['filed']} — excerpt: \"{fil['excerpt'][:f_snip]}\"")
         cw = crowd.get(tk)
         if cw and cw.get("has_data"):
             con = cw.get("consensus", {})
@@ -197,7 +217,7 @@ def _portfolio_context(items, funds, extras, watchlist) -> str:
         arts = by_group.get(tk, [])
         if arts:
             out.append(f"  THIS WEEK'S ARTICLES ({len(arts)}):")
-            out += _arts(arts, 10, 1500)
+            out += _arts(arts, a_cap, a_snip)
         else:
             out.append("  THIS WEEK'S ARTICLES: none — leave summary and news_impact empty.")
     return "\n".join(out)
@@ -236,8 +256,10 @@ Return STRICTLY valid JSON."""
 def analyze_portfolio(items, funds, extras, config):
     watchlist = config.get("watchlist", {})
     tickers = [s.get("ticker") for s in watchlist.get("stocks", []) if s.get("ticker")]
-    user = _portfolio_instructions(tickers) + "\n\nDATA:\n" + _portfolio_context(items, funds, extras, watchlist)
-    data, status = _run_chain(PORTFOLIO_SYSTEM, user, config, "portfolio")
+    head = _portfolio_instructions(tickers) + "\n\nDATA:\n"
+    data, status = _run_chain(PORTFOLIO_SYSTEM,
+                              lambda c: head + _portfolio_context(items, funds, extras, watchlist, compact=c),
+                              config, "portfolio")
     if data is None:
         data = _heur_portfolio(items, funds, extras, watchlist)
     else:
@@ -327,7 +349,9 @@ MARKET_SYSTEM = (
     + _WHY_RULE + " " + _FMT_RULE + " Informational analysis, not investment advice.")
 
 
-def _market_context(items, extras, excluded) -> str:
+def _market_context(items, extras, excluded, compact=False) -> str:
+    t_cap, t_snip, o_cap, o_snip, k_n, k_snip, sc_n, sc_snip = ((3, 200, 3, 120, 15, 220, 10, 100) if compact
+                                                           else (8, 900, 8, 500, 25, 700, 30, 220))
     by_group = defaultdict(list)
     for it in items:
         by_group[it.group].append(it)
@@ -357,25 +381,25 @@ def _market_context(items, extras, excluded) -> str:
         arts = by_group.get(th, [])
         if arts:
             out.append(f"\n=== THEME: {th} ({len(arts)} articles) ===")
-            out += _arts(arts, 8, 900)
+            out += _arts(arts, t_cap, t_snip)
     off = by_group.get("Official releases", [])
     if off:
         out.append("\n=== OFFICIAL RELEASES (Fed / ECB / BLS / BEA) ===")
-        out += _arts(off, 8, 500)
+        out += _arts(off, o_cap, o_snip)
     cands = extras.get("candidates") or []
     if cands:
         out.append("\n=== MARKET-WIDE CANDIDATES (companies in the window's news; the ONLY pool for stocks_to_watch) ===")
-        for c in cands:
+        for c in cands[:k_n]:
             bits = [f"  {c['ticker']}"]
             for k, lab in (("price", "price"), ("pct_1d", "1d"), ("pct_5d", "5d"), ("vol_ratio", "vol x avg")):
                 if c.get(k) is not None:
                     bits.append(f"{lab} {c[k]:+.2f}%" if k.startswith("pct") else f"{lab} {c[k]}")
             out.append(", ".join(bits) + f", {c.get('mentions', 1)} stories:")
-            out += _arts(c.get("articles") or [], 2, 700)
+            out += _arts(c.get("articles") or [], 1 if compact else 2, k_snip)
     scan = extras.get("market_scan") or []
     if scan:
         out.append("\n=== OTHER MARKET-WIDE HEADLINES ===")
-        out += _arts(scan, 30, 220)
+        out += _arts(scan, sc_n, sc_snip)
     crypto = extras.get("crypto") or {}
     if crypto.get("snapshot"):
         out.append("\n=== CRYPTO ===")
@@ -418,9 +442,9 @@ def analyze_market(items, extras, config):
     themes = extras.get("sector_labels") or extras.get("theme_labels", [])
     excluded = [s.get("ticker") for s in (config.get("watchlist", {}) or {}).get("stocks", []) if s.get("ticker")]
     watch_max = int((config.get("market_scan") or {}).get("watch_pool", 5))
-    user = (_market_instructions(themes, config.get("shariah_only", False), watch_max)
-            + "\n\nDATA:\n" + _market_context(items, extras, excluded))
-    data, status = _run_chain(MARKET_SYSTEM, user, config, "market")
+    head = (_market_instructions(themes, config.get("shariah_only", False), watch_max) + "\n\nDATA:\n")
+    data, status = _run_chain(MARKET_SYSTEM, lambda c: head + _market_context(items, extras, excluded, compact=c),
+                              config, "market")
     if data is None:
         data = _heur_market(items, extras, watch_max)
     # Code-level guards: themes need articles; picks need a catalyst, ≤ watch_max,
@@ -447,7 +471,7 @@ def analyze_market(items, extras, config):
 
 def _pts(x):
     if isinstance(x, str):
-        x = [l for l in x.splitlines() if l.strip()]
+        x = split_bullets(x)
     return [str(p).strip().lstrip("-•–·* ").strip() for p in (x or []) if str(p).strip()]
 
 

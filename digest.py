@@ -105,7 +105,8 @@ def _expense(x):
 def _pts(lst):
     """AI bullets → clean list (accepts a newline string or a list)."""
     if isinstance(lst, str):
-        lst = lst.splitlines()
+        import analyzer as _an
+        lst = _an.split_bullets(lst)
     out = []
     for p in (lst or []):
         t = str(p).strip().lstrip("-•–·* ").strip()

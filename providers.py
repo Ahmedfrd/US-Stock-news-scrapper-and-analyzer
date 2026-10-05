@@ -80,6 +80,10 @@ class _ModelGone(ProviderError):
     """The model itself is unavailable (removed, restricted, not free any more)."""
 
 
+class _KeyNotFound(_ModelGone):
+    """One Gemini key's project can't see the model — try the next key."""
+
+
 _GONE_PAT = re.compile(r"does not exist|not found|no endpoints|decommission|deprecated|"
                        r"not a valid model|unavailable for free|agentic harness|"
                        r"model_not_found|is not available|no longer available", re.I)
@@ -194,6 +198,7 @@ def _gemini(system: str, user: str, model: str, json_mode: bool = True) -> str:
             "contents": [{"parts": [{"text": user}]}],
             "generationConfig": gen_cfg}
     last = None
+    not_found = 0
     for idx, key in enumerate(keys, 1):
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model}:generateContent?key={key}")
@@ -203,7 +208,8 @@ def _gemini(system: str, user: str, model: str, json_mode: bool = True) -> str:
             if r.status_code == 429:
                 raise ProviderError("Gemini rate limited (429)")
             if r.status_code == 404:
-                raise _ModelGone(f"Gemini model {model} not found")
+                # Per KEY: one key's project may not serve a model another does.
+                raise _KeyNotFound(f"Gemini model {model} not found for key #{idx}: {r.text[:160]}")
             if r.status_code >= 400:
                 raise ProviderError(f"Gemini HTTP {r.status_code}: {r.text[:300]}")
             cand = r.json()["candidates"][0]
@@ -214,12 +220,17 @@ def _gemini(system: str, user: str, model: str, json_mode: bool = True) -> str:
 
         try:
             return _retry(call, tries=2)
-        except _ModelGone:
-            raise
+        except _KeyNotFound as e:
+            not_found += 1
+            last = e
+            if idx < len(keys):
+                print(f"[providers] {e}; trying key #{idx + 1}.", flush=True)
         except Exception as e:  # noqa: BLE001 — this key exhausted; try the next one
             last = e
             if idx < len(keys):
                 print(f"[providers] Gemini key #{idx} failed ({e}); trying key #{idx + 1}.", flush=True)
+    if not_found == len(keys):
+        raise _ModelGone(f"Gemini model {model} not found for any key")
     raise ProviderError(str(last))
 
 
@@ -304,6 +315,11 @@ def complete(provider: str, system: str, user: str, model: str | None = None,
                 continue
             raise
     raise ProviderError(str(last) if last else f"{provider}: no usable model")
+
+
+def user_cap(provider: str) -> int | None:
+    """Max user-message size a provider accepts here (None = no practical cap)."""
+    return _MAX_USER_CHARS.get((provider or "").lower())
 
 
 def model_in_use(provider: str) -> str:
