@@ -26,7 +26,73 @@
     }
   ],
   "portfolio": {
-    "verdicts": {}
+    "verdicts": {
+      "ELS": [
+        {
+          "call": "reduce",
+          "conviction": "medium",
+          "date": "2026-10-05",
+          "pointers": [
+            "Mizuho downgrade to Neutral adds to negative sentiment, despite strong NOI growth reported this week.",
+            "Stock hit new 52-week lows, indicating continued market pressure and lack of clear support.",
+            "Valuation remains stretched with a high PEG ratio, making it vulnerable in a rising rate environment."
+          ],
+          "price": 58.25
+        }
+      ],
+      "HLAL": [
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-10-05",
+          "pointers": [
+            "HLAL outperformed its benchmark this week, continuing a positive trend over the last four weeks.",
+            "AI-related news, including Nvidia and Microsoft, suggests continued strength in key holdings.",
+            "The ETF is at its 52-week high, indicating strong momentum and investor confidence."
+          ],
+          "price": 75.6
+        }
+      ],
+      "LLY": [
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-10-05",
+          "pointers": [
+            "Strong Q2 2026 sales for Mounjaro and Zepbound confirm continued dominance in obesity/diabetes market.",
+            "New oral GLP-1 drug Foundayo shows promising early adoption and positive late-stage diabetes study results.",
+            "Despite recent price dip, fundamentals remain robust with high growth and profitability scores."
+          ],
+          "price": 1142.85
+        }
+      ],
+      "SPRE": [
+        {
+          "call": "reduce",
+          "conviction": "high",
+          "date": "2026-10-05",
+          "pointers": [
+            "SPRE significantly underperformed its benchmark this week, extending a four-week losing streak.",
+            "The fund's RSI has plummeted to an extremely oversold 13.0, indicating strong selling pressure.",
+            "Key holdings like Goodman and EastGroup Properties faced negative news, including a price target cut for EGP."
+          ],
+          "price": 18.67
+        }
+      ],
+      "UMMA": [
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-10-05",
+          "pointers": [
+            "UMMA significantly outperformed its benchmark this week, gaining +1.74% against the benchmark's -0.22%.",
+            "Key holdings like ASML saw strong gains (+3.24% Tue), contributing to the ETF's positive momentum.",
+            "The ETF's RSI increased to 56.9, and volume was 1.04x the 20-day average, indicating growing interest."
+          ],
+          "price": 37.77
+        }
+      ]
+    }
   },
-  "updated": "2026-10-05T01:25:04+00:00"
+  "updated": "2026-10-05T07:05:25+00:00"
 }
