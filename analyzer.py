@@ -433,7 +433,9 @@ Themes available: {', '.join(themes)}.
 "sectors": only themes that have articles AND something worth saying; keep the theme label exact.
 "stocks_to_watch": up to {watch_pool}, BEST FIRST (the reader sees at most 3 after screening). Each MUST be a
 ticker from MARKET-WIDE CANDIDATES whose own articles contain a concrete catalyst (earnings/guidance, deal,
-regulatory/FDA, product, contract, analyst action).
+regulatory/FDA, product, contract, analyst action). The catalyst must be an EVENT that happened inside the news
+window (article dates are shown) or a scheduled event with its date — opinion or valuation pieces ("looks cheap",
+"could soar", "stock to buy") and old results resurfacing in a recap are NOT catalysts.
 US listings only (no .KS/.T/.L/... suffixes). Never an EXCLUDED ticker. Return [] if none qualify.{sh}
 Return STRICTLY valid JSON."""
 

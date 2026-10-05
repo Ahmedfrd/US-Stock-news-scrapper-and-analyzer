@@ -729,7 +729,9 @@ def collect_market(config: dict, scan_items: list[NewsItem] | None = None) -> li
         kws = th.get("keywords") or []
         if kws:
             for it in scan_items:
-                if _theme_hit(f"{it.title} {(it.summary or '')[:300]}", kws):
+                # headline hits only — a keyword buried in a wire summary pulled
+                # in unrelated stories (e.g. a timber-import notice under Macro)
+                if _theme_hit(it.title or "", kws):
                     got.append(NewsItem(title=it.title, url=it.url, source=it.source,
                                         published=it.published, summary=it.summary,
                                         group=label, group_type="theme"))
