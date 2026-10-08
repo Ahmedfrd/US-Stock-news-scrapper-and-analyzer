@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-07T01:52:57+00:00"
+    "last_window_end": "2026-10-08T02:21:03+00:00"
   },
   "picks": [
     {
@@ -58,6 +58,27 @@
       "date": "2026-10-07",
       "price": 64.21,
       "ticker": "PENG"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Earnings beat and 2027 outlook raise (Wed 07 Oct)",
+      "date": "2026-10-08",
+      "price": 72.61,
+      "ticker": "PENG"
+    },
+    {
+      "call": "hold",
+      "catalyst": "House Committee Report on China Ties (Wed 07 Oct)",
+      "date": "2026-10-08",
+      "price": 5.89,
+      "ticker": "BULL"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Hiked profit guidance after tariff refunds, but less optimistic sales outlook (Wed 07 Oct)",
+      "date": "2026-10-08",
+      "price": 19.51,
+      "ticker": "LEVI"
     }
   ],
   "portfolio": {
@@ -129,5 +150,5 @@
       ]
     }
   },
-  "updated": "2026-10-07T01:56:01+00:00"
+  "updated": "2026-10-08T02:23:51+00:00"
 }
