@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-09T02:38:28+00:00"
+    "last_window_end": "2026-10-10T01:58:11+00:00"
   },
   "picks": [
     {
@@ -93,6 +93,27 @@
       "date": "2026-10-09",
       "price": 154.76,
       "ticker": "TGT"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Moderna stock hit a 4-year high on Friday, October 9, due to a planned national cancer vaccine effort.",
+      "date": "2026-10-10",
+      "price": 225.0,
+      "ticker": "MRNA"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Humana stock surged on Friday, October 9, after its key Medicare Advantage plan received a higher rating.",
+      "date": "2026-10-10",
+      "price": 431.87,
+      "ticker": "HUM"
+    },
+    {
+      "call": "hold",
+      "catalyst": "VEEA stock surged on Friday, October 9, due to a NovaGen merger and Trollee deal.",
+      "date": "2026-10-10",
+      "price": 5.7,
+      "ticker": "VEEA"
     }
   ],
   "portfolio": {
@@ -108,6 +129,17 @@
             "Valuation remains stretched with a high PEG ratio, making it vulnerable in a rising rate environment."
           ],
           "price": 58.25
+        },
+        {
+          "call": "hold",
+          "conviction": "low",
+          "date": "2026-10-10",
+          "pointers": [
+            "Stock showed a modest rebound this week, outperforming the benchmark slightly.",
+            "UBS lowered price target to $67, but maintained a 'Buy' rating, creating mixed signals.",
+            "Strong profitability metrics (ROE 22.9%, net margin 25.6%) continue to support fundamentals."
+          ],
+          "price": 59.01
         }
       ],
       "HLAL": [
@@ -121,6 +153,17 @@
             "The ETF is at its 52-week high, indicating strong momentum and investor confidence."
           ],
           "price": 75.6
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-10-10",
+          "pointers": [
+            "HLAL underperformed its benchmark this week, breaking a recent trend of outperformance.",
+            "Apple's reported iPhone order reductions could impact a significant holding.",
+            "Strong volume and continued positive momentum (RSI 62.1, above SMAs) still support the fund."
+          ],
+          "price": 75.914
         }
       ],
       "LLY": [
@@ -134,6 +177,17 @@
             "Despite recent price dip, fundamentals remain robust with high growth and profitability scores."
           ],
           "price": 1142.85
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-10-10",
+          "pointers": [
+            "Strong pipeline updates for Zepbound, Foundayo, and retatrutide reinforce long-term growth prospects.",
+            "Stock gained 3.19% this week, outperforming benchmark, with volume near average and RSI improving.",
+            "Despite a large shareholder sale, analyst price targets are rising, suggesting continued upside."
+          ],
+          "price": 1179.27
         }
       ],
       "SPRE": [
@@ -147,6 +201,17 @@
             "Key holdings like Goodman and EastGroup Properties faced negative news, including a price target cut for EGP."
           ],
           "price": 18.67
+        },
+        {
+          "call": "reduce",
+          "conviction": "high",
+          "date": "2026-10-10",
+          "pointers": [
+            "SPRE continued its underperformance this week, lagging its benchmark by over 1.2 percentage points.",
+            "The fund's RSI, though up slightly, remains deeply oversold at 22.7, signaling persistent selling pressure.",
+            "Goodman faced negative news regarding a data center setback, impacting a key holding."
+          ],
+          "price": 18.66
         }
       ],
       "UMMA": [
@@ -160,9 +225,20 @@
             "The ETF's RSI increased to 56.9, and volume was 1.04x the 20-day average, indicating growing interest."
           ],
           "price": 37.77
+        },
+        {
+          "call": "reduce",
+          "conviction": "medium",
+          "date": "2026-10-10",
+          "pointers": [
+            "UMMA significantly underperformed its benchmark this week, dropping -2.12% while the benchmark gained +1.16%.",
+            "RSI fell from 56.9 to 48.8, and the price closed below its SMA50, indicating weakening momentum.",
+            "Despite positive news for some tech holdings, the ETF saw heavy selling pressure with 1.65x average volume."
+          ],
+          "price": 36.97
         }
       ]
     }
   },
-  "updated": "2026-10-09T02:41:11+00:00"
+  "updated": "2026-10-10T02:04:02+00:00"
 }
