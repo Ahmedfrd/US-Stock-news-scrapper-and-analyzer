@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-10T01:58:11+00:00"
+    "last_window_end": "2026-10-12T01:53:57+00:00"
   },
   "picks": [
     {
@@ -114,6 +114,20 @@
       "date": "2026-10-10",
       "price": 5.7,
       "ticker": "VEEA"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Mirum Pharmaceuticals to report Livmarli trial results Monday, October 12",
+      "date": "2026-10-12",
+      "price": 86.01,
+      "ticker": "MIRM"
+    },
+    {
+      "call": "hold",
+      "catalyst": "NBIS says switch to Bloom 'Significantly Enhanced' New Jersey AI Data Center Project",
+      "date": "2026-10-12",
+      "price": 2.91,
+      "ticker": "DAIO"
     }
   ],
   "portfolio": {
@@ -240,5 +254,5 @@
       ]
     }
   },
-  "updated": "2026-10-10T02:04:02+00:00"
+  "updated": "2026-10-12T01:55:35+00:00"
 }
