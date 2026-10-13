@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-12T01:53:57+00:00"
+    "last_window_end": "2026-10-13T03:15:46+00:00"
   },
   "picks": [
     {
@@ -128,6 +128,20 @@
       "date": "2026-10-12",
       "price": 2.91,
       "ticker": "DAIO"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Starbucks says not buying Chipotle, ends takeover speculation (Mon 12 Oct 20:25 UTC)",
+      "date": "2026-10-13",
+      "price": 92.285,
+      "ticker": "SBUX"
+    },
+    {
+      "call": "hold",
+      "catalyst": "IonQ To Buy Elisity In $1.3 Billion Deal Amid Quantum Acquisition Spree (Mon 12 Oct 16:32 UTC)",
+      "date": "2026-10-13",
+      "price": 36.27,
+      "ticker": "IONQ"
     }
   ],
   "portfolio": {
@@ -254,5 +268,5 @@
       ]
     }
   },
-  "updated": "2026-10-12T01:55:35+00:00"
+  "updated": "2026-10-13T03:18:59+00:00"
 }
