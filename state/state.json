@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-16T00:52:38+00:00"
+    "last_window_end": "2026-10-17T00:53:21+00:00"
   },
   "picks": [
     {
@@ -163,6 +163,13 @@
       "date": "2026-10-16",
       "price": 72.61,
       "ticker": "NFLX"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "International Seaways leverages share price in Bruton takeover deal (Fri 16 Oct 13:28 UTC)",
+      "date": "2026-10-17",
+      "price": 109.99,
+      "ticker": "INSW"
     }
   ],
   "portfolio": {
@@ -189,6 +196,17 @@
             "Strong profitability metrics (ROE 22.9%, net margin 25.6%) continue to support fundamentals."
           ],
           "price": 59.01
+        },
+        {
+          "call": "hold",
+          "conviction": "low",
+          "date": "2026-10-17",
+          "pointers": [
+            "Stock outperformed benchmark this week, gaining 2.99% against a declining market.",
+            "Analyst price targets were trimmed by Barclays and RBC, but ratings remained positive.",
+            "Strong profitability metrics (ROE 22.9%, net margin 25.6%) continue to underpin fundamentals."
+          ],
+          "price": 61.21
         }
       ],
       "HLAL": [
@@ -213,6 +231,17 @@
             "Strong volume and continued positive momentum (RSI 62.1, above SMAs) still support the fund."
           ],
           "price": 75.914
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-10-17",
+          "pointers": [
+            "HLAL significantly underperformed its benchmark this week, driven by weakness in chipmakers and cloud stocks.",
+            "The fund's RSI dropped to 48.6, indicating a loss of momentum, and volume was below average.",
+            "Despite the weekly dip, the fund remains in an uptrend, trading above its 50 and 200-day SMAs."
+          ],
+          "price": 74.594
         }
       ],
       "LLY": [
@@ -237,6 +266,17 @@
             "Despite a large shareholder sale, analyst price targets are rising, suggesting continued upside."
           ],
           "price": 1179.27
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-10-17",
+          "pointers": [
+            "EMA endorsement for Foundayo expands market access for Lilly's oral GLP-1, complementing Zepbound's success.",
+            "New study suggests GLP-1s may slow aging, potentially broadening the addressable market for Lilly's drugs.",
+            "Strong weekly performance (+7.01%) indicates continued market confidence in Lilly's growth trajectory."
+          ],
+          "price": 1257.03
         }
       ],
       "SPRE": [
@@ -261,6 +301,17 @@
             "Goodman faced negative news regarding a data center setback, impacting a key holding."
           ],
           "price": 18.66
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-10-17",
+          "pointers": [
+            "SPRE outperformed its benchmark this week, showing a slight recovery after prolonged underperformance.",
+            "RSI increased from 14.4 to 24.9, indicating some easing of the extreme oversold conditions.",
+            "Brookdale Senior Living's acquisition of Welltower properties suggests active REIT sector transactions."
+          ],
+          "price": 18.59
         }
       ],
       "UMMA": [
@@ -285,9 +336,20 @@
             "Despite positive news for some tech holdings, the ETF saw heavy selling pressure with 1.65x average volume."
           ],
           "price": 36.97
+        },
+        {
+          "call": "reduce",
+          "conviction": "medium",
+          "date": "2026-10-17",
+          "pointers": [
+            "UMMA significantly underperformed its benchmark this week, dropping -2.41% vs. benchmark's -0.28%.",
+            "RSI fell from 44.4 to 37.9, indicating continued weakening momentum and approaching oversold territory.",
+            "Despite positive news for TSM, major holdings like SK Hynix plunged, contributing to the ETF's decline."
+          ],
+          "price": 35.67
         }
       ]
     }
   },
-  "updated": "2026-10-16T00:54:06+00:00"
+  "updated": "2026-10-17T00:57:19+00:00"
 }
