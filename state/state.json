@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-19T00:34:47+00:00"
+    "last_window_end": "2026-10-20T01:20:27+00:00"
   },
   "picks": [
     {
@@ -184,6 +184,20 @@
       "date": "2026-10-19",
       "price": 401.43,
       "ticker": "UNH"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Bernstein Upgrades to Outperform (Mon 19 Oct 19:35 UTC)",
+      "date": "2026-10-20",
+      "price": 260.36,
+      "ticker": "DDOG"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Phase 3 Bitopertin Trial Meets Primary and Secondary Endpoints (Mon 19 Oct 12:48 UTC)",
+      "date": "2026-10-20",
+      "price": 78.93,
+      "ticker": "IRON"
     }
   ],
   "portfolio": {
@@ -365,5 +379,5 @@
       ]
     }
   },
-  "updated": "2026-10-19T00:36:38+00:00"
+  "updated": "2026-10-20T01:22:05+00:00"
 }
