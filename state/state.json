@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-20T01:20:27+00:00"
+    "last_window_end": "2026-10-21T01:05:09+00:00"
   },
   "picks": [
     {
@@ -198,6 +198,13 @@
       "date": "2026-10-20",
       "price": 78.93,
       "ticker": "IRON"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Salesforce (CRM) to acquire Braze in a $5.66 billion all-cash deal (Tue 20 Oct 17:25 UTC)",
+      "date": "2026-10-21",
+      "price": 45.57,
+      "ticker": "BRZE"
     }
   ],
   "portfolio": {
@@ -379,5 +386,5 @@
       ]
     }
   },
-  "updated": "2026-10-20T01:22:05+00:00"
+  "updated": "2026-10-21T01:06:26+00:00"
 }
