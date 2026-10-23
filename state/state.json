@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-22T01:03:52+00:00"
+    "last_window_end": "2026-10-23T01:04:18+00:00"
   },
   "picks": [
     {
@@ -226,6 +226,27 @@
       "date": "2026-10-22",
       "price": 0.939,
       "ticker": "CRDF"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Procter & Gamble (PG) reported quarterly earnings and revenue that beat analysts' expectations on Thursday, October 22, with sales rising 4%.",
+      "date": "2026-10-23",
+      "price": 165.59,
+      "ticker": "PG"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Western Digital expects Q2 FY2027 revenue of $5.1B +/-$100M with 60%-61% gross margin, and its stock jumped as AI storage demand ignited a 160% profit surge and",
+      "date": "2026-10-23",
+      "price": 354.19,
+      "ticker": "WDC"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Arbutus Biopharma announced on Thursday, October 22, that the FDA lifted the clinical hold on its AB-101 program.",
+      "date": "2026-10-23",
+      "price": 4.21,
+      "ticker": "ABUS"
     }
   ],
   "portfolio": {
@@ -407,5 +428,5 @@
       ]
     }
   },
-  "updated": "2026-10-22T01:06:22+00:00"
+  "updated": "2026-10-23T01:06:46+00:00"
 }
