@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-23T01:04:18+00:00"
+    "last_window_end": "2026-10-24T01:13:31+00:00"
   },
   "picks": [
     {
@@ -247,6 +247,27 @@
       "date": "2026-10-23",
       "price": 4.21,
       "ticker": "ABUS"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Lycia Therapeutics Soars 47% in Nasdaq Debut on \u201cUpsized\u201d $318 Million IPO (Fri 23 Oct 20:02 UTC)",
+      "date": "2026-10-24",
+      "price": 102.56,
+      "ticker": "NDAQ"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Scalpers offer Apple iPhone Duo buyers hundreds extra outside Beijing launch (Fri 23 Oct 20:06 UTC)",
+      "date": "2026-10-24",
+      "price": 347.725,
+      "ticker": "AAPL"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Autoliv signals $1.2b operating cash flow and ~10.5% adjusted operating margin for 2026 while cutting CapEx to ~4% of sales (Fri 23 Oct 22:18 UTC)",
+      "date": "2026-10-24",
+      "price": 114.67,
+      "ticker": "ALV"
     }
   ],
   "portfolio": {
@@ -284,6 +305,17 @@
             "Strong profitability metrics (ROE 22.9%, net margin 25.6%) continue to underpin fundamentals."
           ],
           "price": 61.21
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-10-24",
+          "pointers": [
+            "Q3 results showed solid 6.7% core NOI growth and met FFO guidance, stabilizing the stock.",
+            "RBC Capital reiterated its Buy rating and $68 target, signaling continued analyst confidence.",
+            "Despite positive news, the stock saw volatile trading and ended the week down slightly."
+          ],
+          "price": 60.84
         }
       ],
       "HLAL": [
@@ -319,6 +351,17 @@
             "Despite the weekly dip, the fund remains in an uptrend, trading above its 50 and 200-day SMAs."
           ],
           "price": 74.594
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-10-24",
+          "pointers": [
+            "HLAL underperformed its benchmark this week, with a -1.12% return vs -0.43% for the benchmark.",
+            "Rising oil prices and inflation fears ahead of the Fed meeting next week impacted broader market sentiment.",
+            "The fund's RSI dropped to 36.9, indicating continued loss of momentum and nearing oversold territory."
+          ],
+          "price": 72.51
         }
       ],
       "LLY": [
@@ -354,6 +397,17 @@
             "Strong weekly performance (+7.01%) indicates continued market confidence in Lilly's growth trajectory."
           ],
           "price": 1257.03
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-10-24",
+          "pointers": [
+            "LLY's new $5B manufacturing hub in Richmond signals long-term capacity expansion for key drugs.",
+            "J.P. Morgan projects a $22B emerging market weight-loss drug opportunity by 2035, benefiting LLY.",
+            "Despite a Friday dip, LLY outperformed the benchmark this week, maintaining strong momentum."
+          ],
+          "price": 1273.46
         }
       ],
       "SPRE": [
@@ -389,6 +443,17 @@
             "Brookdale Senior Living's acquisition of Welltower properties suggests active REIT sector transactions."
           ],
           "price": 18.59
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-10-24",
+          "pointers": [
+            "SPRE underperformed its benchmark this week, with a -1.20% return vs. -0.43% for the benchmark.",
+            "Welltower and Equinix Q3 earnings are anticipated to show growth, but Weyerhaeuser expects a decline.",
+            "EastGroup Properties beat Q3 FFO expectations and raised guidance, yet its stock still slipped this week."
+          ],
+          "price": 18.485
         }
       ],
       "UMMA": [
@@ -424,9 +489,20 @@
             "Despite positive news for TSM, major holdings like SK Hynix plunged, contributing to the ETF's decline."
           ],
           "price": 35.67
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-10-24",
+          "pointers": [
+            "UMMA outperformed its benchmark this week (+0.23 pts), breaking a streak of underperformance.",
+            "RSI rebounded from 34.3 to 36.9, suggesting a potential stabilization after recent declines.",
+            "Mixed news for top holdings: TSM fell despite record profit, while SK Hynix jumped on IPO news."
+          ],
+          "price": 35.1
         }
       ]
     }
   },
-  "updated": "2026-10-23T01:06:46+00:00"
+  "updated": "2026-10-24T01:27:39+00:00"
 }
