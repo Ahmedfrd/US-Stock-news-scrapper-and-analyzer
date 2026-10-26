@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-24T01:13:31+00:00"
+    "last_window_end": "2026-10-26T00:49:22+00:00"
   },
   "picks": [
     {
@@ -268,6 +268,27 @@
       "date": "2026-10-24",
       "price": 114.67,
       "ticker": "ALV"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "JP Morgan raises UnitedHealth price target to $524, keeps Overweight (Sun 25 Oct 12:16 UTC)",
+      "date": "2026-10-26",
+      "price": 418.09,
+      "ticker": "UNH"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Apple seeks more iPhone Duo supplies amid strong demand for debut foldable- report (Sun 25 Oct 23:40 UTC)",
+      "date": "2026-10-26",
+      "price": 347.725,
+      "ticker": "AAPL"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Canaccord Genuity cuts Rollins price target to $36, keeps Hold rating (Sun 25 Oct 12:43 UTC)",
+      "date": "2026-10-26",
+      "price": 34.82,
+      "ticker": "ROL"
     }
   ],
   "portfolio": {
@@ -504,5 +525,5 @@
       ]
     }
   },
-  "updated": "2026-10-24T01:27:39+00:00"
+  "updated": "2026-10-26T00:51:25+00:00"
 }
