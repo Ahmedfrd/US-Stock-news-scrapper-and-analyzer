@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-26T00:49:22+00:00"
+    "last_window_end": "2026-10-27T01:40:31+00:00"
   },
   "picks": [
     {
@@ -289,6 +289,13 @@
       "date": "2026-10-26",
       "price": 34.82,
       "ticker": "ROL"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Range Resources was among the market cap stock movers on Mon 26 Oct.",
+      "date": "2026-10-27",
+      "price": 53.56,
+      "ticker": "RRC"
     }
   ],
   "portfolio": {
@@ -525,5 +532,5 @@
       ]
     }
   },
-  "updated": "2026-10-26T00:51:25+00:00"
+  "updated": "2026-10-27T01:41:56+00:00"
 }
