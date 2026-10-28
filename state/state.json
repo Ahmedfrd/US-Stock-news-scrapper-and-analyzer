@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-27T01:40:31+00:00"
+    "last_window_end": "2026-10-28T01:52:36+00:00"
   },
   "picks": [
     {
@@ -296,6 +296,13 @@
       "date": "2026-10-27",
       "price": 53.56,
       "ticker": "RRC"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Analyst upgrade (Tue 27 Oct)",
+      "date": "2026-10-28",
+      "price": 342.33,
+      "ticker": "AVGO"
     }
   ],
   "portfolio": {
@@ -532,5 +539,5 @@
       ]
     }
   },
-  "updated": "2026-10-27T01:41:56+00:00"
+  "updated": "2026-10-28T01:53:45+00:00"
 }
