@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-29T01:59:32+00:00"
+    "last_window_end": "2026-10-30T02:14:19+00:00"
   },
   "picks": [
     {
@@ -303,6 +303,27 @@
       "date": "2026-10-28",
       "price": 342.33,
       "ticker": "AVGO"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Crocs lifted its full-year guidance following a third-quarter beat (Thu 29 Oct)",
+      "date": "2026-10-30",
+      "price": 150.26,
+      "ticker": "CROX"
+    },
+    {
+      "call": "hold",
+      "catalyst": "DoorDash struck a $17 billion deal for US rival Instacart (Thu 29 Oct)",
+      "date": "2026-10-30",
+      "price": 179.0,
+      "ticker": "DASH"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Microsoft plans to raise $25 billion in debt to fund its AI buildout (Fri 30 Oct)",
+      "date": "2026-10-30",
+      "price": 530.14,
+      "ticker": "MSFT"
     }
   ],
   "portfolio": {
@@ -539,5 +560,5 @@
       ]
     }
   },
-  "updated": "2026-10-29T02:00:11+00:00"
+  "updated": "2026-10-30T02:16:47+00:00"
 }
