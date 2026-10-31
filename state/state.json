@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-10-30T02:14:19+00:00"
+    "last_window_end": "2026-10-31T01:55:06+00:00"
   },
   "picks": [
     {
@@ -324,6 +324,20 @@
       "date": "2026-10-30",
       "price": 530.14,
       "ticker": "MSFT"
+    },
+    {
+      "call": "avoid",
+      "catalyst": "Reddit's stock fell 29% to a new 52-week low on Friday after issuing weak Q4 guidance and reporting a significant drop in search referral traffic in Q3.",
+      "date": "2026-10-31",
+      "price": 91.73,
+      "ticker": "RDDT"
+    },
+    {
+      "call": "reduce",
+      "catalyst": "Stryker cut its full-year guidance after missing Q3 revenue expectations, leading BMO to cut its stock price target.",
+      "date": "2026-10-31",
+      "price": 291.86,
+      "ticker": "SYK"
     }
   ],
   "portfolio": {
@@ -372,6 +386,17 @@
             "Despite positive news, the stock saw volatile trading and ended the week down slightly."
           ],
           "price": 60.84
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-10-31",
+          "pointers": [
+            "Q4 dividend declaration reinforces stable cash flow and commitment to shareholder returns.",
+            "CEO transition introduces uncertainty, but underlying demographic trends support long-term demand.",
+            "Stock price declined this week, breaking below key moving averages, indicating short-term weakness."
+          ],
+          "price": 59.03
         }
       ],
       "HLAL": [
@@ -418,6 +443,17 @@
             "The fund's RSI dropped to 36.9, indicating continued loss of momentum and nearing oversold territory."
           ],
           "price": 72.51
+        },
+        {
+          "call": "reduce",
+          "conviction": "medium",
+          "date": "2026-10-31",
+          "pointers": [
+            "HLAL significantly underperformed its benchmark this week, dropping 1.37% vs -0.56% for the benchmark.",
+            "Key holdings like NVDA and GOOGL faced selling pressure, with NVDA losing its top market cap spot to AAPL.",
+            "The fund's RSI dropped further to 35.2, indicating continued negative momentum and nearing oversold conditions."
+          ],
+          "price": 71.52
         }
       ],
       "LLY": [
@@ -464,6 +500,17 @@
             "Despite a Friday dip, LLY outperformed the benchmark this week, maintaining strong momentum."
           ],
           "price": 1273.46
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-10-31",
+          "pointers": [
+            "Q3 revenue surged 39% YoY, driven by Mounjaro and Zepbound, leading to a raised full-year outlook.",
+            "Analysts raised price targets to $1600+ and maintained bullish ratings, citing obesity drug leadership.",
+            "Stock hit new highs, up 11.31% this week, reflecting strong market reception to earnings and guidance."
+          ],
+          "price": 1417.54
         }
       ],
       "SPRE": [
@@ -510,6 +557,17 @@
             "EastGroup Properties beat Q3 FFO expectations and raised guidance, yet its stock still slipped this week."
           ],
           "price": 18.485
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-10-31",
+          "pointers": [
+            "SPRE outperformed its benchmark this week, gaining +0.51% vs. -0.56% for the benchmark.",
+            "Equinix's record bookings and raised outlook, driven by AI demand, are positive for the fund.",
+            "EastGroup Properties' strong Q3 FFO guidance and strategic acquisitions highlight resilience in Sun Belt industrial REITs."
+          ],
+          "price": 18.58
         }
       ],
       "UMMA": [
@@ -556,9 +614,20 @@
             "Mixed news for top holdings: TSM fell despite record profit, while SK Hynix jumped on IPO news."
           ],
           "price": 35.1
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-10-31",
+          "pointers": [
+            "UMMA outperformed its benchmark this week (+1.50 pts), driven by strong early-week gains.",
+            "RSI improved from 36.9 to 42.7, indicating a potential stabilization despite Friday's dip.",
+            "Mixed news for top holdings: SK Hynix reported strong Q3 results, while Samsung's earnings were reviewed."
+          ],
+          "price": 35.43
         }
       ]
     }
   },
-  "updated": "2026-10-30T02:16:47+00:00"
+  "updated": "2026-10-31T01:58:19+00:00"
 }
