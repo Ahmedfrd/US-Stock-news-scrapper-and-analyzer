@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-11-06T02:56:42+00:00"
+    "last_window_end": "2026-11-07T02:27:02+00:00"
   },
   "picks": [
     {
@@ -422,6 +422,20 @@
       "date": "2026-11-06",
       "price": 343.69,
       "ticker": "TSLA"
+    },
+    {
+      "call": "hold",
+      "catalyst": "FDA Approval for RYBREVANT FASPRO issued to JANSSEN BIOTECH for treating head and neck cancer (Fri 06 Nov 20:46 UTC)",
+      "date": "2026-11-07",
+      "price": 276.22,
+      "ticker": "JNJ"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Coherent Surges 13% as Investors Revisit $20 Billion AI Deal After Sell-Off (Fri 06 Nov 19:10 UTC)",
+      "date": "2026-11-07",
+      "price": 192.81,
+      "ticker": "COHR"
     }
   ],
   "portfolio": {
@@ -481,6 +495,17 @@
             "Stock price declined this week, breaking below key moving averages, indicating short-term weakness."
           ],
           "price": 59.03
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-07",
+          "pointers": [
+            "Stock surged +6.64% this week, outperforming the benchmark significantly and showing strong relative strength.",
+            "Insider buying by a director, though small, signals confidence at a lower price point.",
+            "Truist lowered its price target to $63, aligning with current levels and reflecting limited near-term upside."
+          ],
+          "price": 62.95
         }
       ],
       "HLAL": [
@@ -538,6 +563,17 @@
             "The fund's RSI dropped further to 35.2, indicating continued negative momentum and nearing oversold conditions."
           ],
           "price": 71.52
+        },
+        {
+          "call": "reduce",
+          "conviction": "medium",
+          "date": "2026-11-07",
+          "pointers": [
+            "HLAL significantly underperformed its benchmark this week, dropping 7.89% vs -2.70%, with its RSI now at 26.9 (oversold).",
+            "Key holdings like NVDA and AVGO are showing strong AI-driven growth, but broader market sentiment is negative.",
+            "Meta's pause on data-scraping terms could impact AI development, a key theme for some holdings."
+          ],
+          "price": 67.61
         }
       ],
       "LLY": [
@@ -595,6 +631,17 @@
             "Stock hit new highs, up 11.31% this week, reflecting strong market reception to earnings and guidance."
           ],
           "price": 1417.54
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-11-07",
+          "pointers": [
+            "New Hims & Hers partnership expands direct access for Zepbound and Foundayo, mirroring competitor strategy.",
+            "Despite weekly pullback, strong Q3 results and raised guidance continue to underpin long-term growth prospects.",
+            "Profitability remains exceptional, but high valuation and drug concentration warrant caution."
+          ],
+          "price": 1354.0
         }
       ],
       "SPRE": [
@@ -652,6 +699,17 @@
             "EastGroup Properties' strong Q3 FFO guidance and strategic acquisitions highlight resilience in Sun Belt industrial REITs."
           ],
           "price": 18.58
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-11-07",
+          "pointers": [
+            "SPRE significantly outperformed its benchmark this week, gaining +1.50% vs. -2.70% for the benchmark.",
+            "Welltower and Sun Communities showed strong pricing power and strategic asset management, driving FFO growth.",
+            "NextDC shares soared 51% after major stake purchases, indicating strong investor interest in data center REITs."
+          ],
+          "price": 18.98
         }
       ],
       "UMMA": [
@@ -709,9 +767,20 @@
             "Mixed news for top holdings: SK Hynix reported strong Q3 results, while Samsung's earnings were reviewed."
           ],
           "price": 35.43
+        },
+        {
+          "call": "reduce",
+          "conviction": "medium",
+          "date": "2026-11-07",
+          "pointers": [
+            "UMMA significantly underperformed its benchmark this week (-5.48 pts), with a sharp -8.18% decline.",
+            "RSI plunged from 52.2 to 30.7, indicating the fund is now oversold.",
+            "Key holdings like ASML saw declines, contributing to the fund's poor performance."
+          ],
+          "price": 33.45
         }
       ]
     }
   },
-  "updated": "2026-11-06T02:58:15+00:00"
+  "updated": "2026-11-07T02:30:29+00:00"
 }
