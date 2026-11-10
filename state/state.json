@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-11-09T02:11:01+00:00"
+    "last_window_end": "2026-11-10T04:24:27+00:00"
   },
   "picks": [
     {
@@ -450,6 +450,20 @@
       "date": "2026-11-09",
       "price": 12.21,
       "ticker": "VIR"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Shares surged to a 52-week high after Q3 earnings (Mon 09 Nov)",
+      "date": "2026-11-10",
+      "price": 30.21,
+      "ticker": "WRBY"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Stock rose overnight after a Q3 beat (Tue 10 Nov)",
+      "date": "2026-11-10",
+      "price": 14.93,
+      "ticker": "TTD"
     }
   ],
   "portfolio": {
@@ -796,5 +810,5 @@
       ]
     }
   },
-  "updated": "2026-11-09T02:11:49+00:00"
+  "updated": "2026-11-10T04:26:08+00:00"
 }
