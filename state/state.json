@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-11-10T04:24:27+00:00"
+    "last_window_end": "2026-11-11T02:20:42+00:00"
   },
   "picks": [
     {
@@ -464,6 +464,20 @@
       "date": "2026-11-10",
       "price": 14.93,
       "ticker": "TTD"
+    },
+    {
+      "call": "hold",
+      "catalyst": "The Trade Desk (TTD) jumped +15.47% after Q3 results showed revenue topped estimates.",
+      "date": "2026-11-11",
+      "price": 15.42,
+      "ticker": "TTD"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Carlsmed (CARL) beat Q3 estimates and raised its 2026 revenue guidance, leading to a +10.54% increase.",
+      "date": "2026-11-11",
+      "price": 14.71,
+      "ticker": "CARL"
     }
   ],
   "portfolio": {
@@ -810,5 +824,5 @@
       ]
     }
   },
-  "updated": "2026-11-10T04:26:08+00:00"
+  "updated": "2026-11-11T02:22:49+00:00"
 }
