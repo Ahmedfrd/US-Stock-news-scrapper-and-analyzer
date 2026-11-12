@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-11-11T02:20:42+00:00"
+    "last_window_end": "2026-11-12T03:28:28+00:00"
   },
   "picks": [
     {
@@ -478,6 +478,20 @@
       "date": "2026-11-11",
       "price": 14.71,
       "ticker": "CARL"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Nvidia's board is reportedly preparing to meet as soon as Wednesday to discuss CEO Jensen Huang's future at the company, following reports of an alleged affair ",
+      "date": "2026-11-12",
+      "price": 173.73,
+      "ticker": "NVDA"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Riskified's growth breakout led to raised guidance again, as reported on Wednesday.",
+      "date": "2026-11-12",
+      "price": 10.37,
+      "ticker": "RSKD"
     }
   ],
   "portfolio": {
@@ -824,5 +838,5 @@
       ]
     }
   },
-  "updated": "2026-11-11T02:22:49+00:00"
+  "updated": "2026-11-12T03:29:46+00:00"
 }
