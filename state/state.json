@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-11-13T03:00:38+00:00"
+    "last_window_end": "2026-11-14T02:46:28+00:00"
   },
   "picks": [
     {
@@ -513,6 +513,13 @@
       "date": "2026-11-13",
       "price": 397.45,
       "ticker": "TSLA"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Walmart (NASDAQ:WMT) Shares Up 1.5% on Analyst Upgrade (Fri 13 Nov 22:11 UTC)",
+      "date": "2026-11-14",
+      "price": 128.09,
+      "ticker": "WMT"
     }
   ],
   "portfolio": {
@@ -583,6 +590,17 @@
             "Truist lowered its price target to $63, aligning with current levels and reflecting limited near-term upside."
           ],
           "price": 62.95
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-14",
+          "pointers": [
+            "Underperformed benchmark this week, with a -1.32% return vs +2.59% for the market.",
+            "Sumitomo Mitsui Trust Group reduced its stake, signaling a major institutional exit.",
+            "Strong profitability metrics (ROE 22.3%, profit score 87.0) continue to support the long-term case."
+          ],
+          "price": 62.12
         }
       ],
       "HLAL": [
@@ -651,6 +669,17 @@
             "Meta's pause on data-scraping terms could impact AI development, a key theme for some holdings."
           ],
           "price": 67.61
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-14",
+          "pointers": [
+            "HLAL matched its benchmark this week, recovering from prior underperformance with a +2.60% gain.",
+            "Key holding Apple is hitting new highs, driven by strong growth and higher product pricing.",
+            "Meta Platforms saw significant ETF buying this week, reinforcing its AI commerce thesis."
+          ],
+          "price": 69.91
         }
       ],
       "LLY": [
@@ -719,6 +748,17 @@
             "Profitability remains exceptional, but high valuation and drug concentration warrant caution."
           ],
           "price": 1354.0
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-11-14",
+          "pointers": [
+            "China approval for GLP-1 weight-loss pill opens significant new market opportunity.",
+            "Hims & Hers partnership expands Zepbound/Foundayo access, strengthening obesity care platform.",
+            "Strong weekly outperformance and momentum, but valuation remains a key concern."
+          ],
+          "price": 1443.5
         }
       ],
       "SPRE": [
@@ -787,6 +827,17 @@
             "NextDC shares soared 51% after major stake purchases, indicating strong investor interest in data center REITs."
           ],
           "price": 18.98
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-14",
+          "pointers": [
+            "SPRE underperformed its benchmark this week, gaining +1.43% vs. +2.59% for the benchmark.",
+            "Welltower's strong analyst optimism and Equinix's long-term outperformance are positive signals.",
+            "Sun Communities had its price target lowered, and Goodman Group's valuation was questioned this week."
+          ],
+          "price": 19.17
         }
       ],
       "UMMA": [
@@ -855,9 +906,20 @@
             "Key holdings like ASML saw declines, contributing to the fund's poor performance."
           ],
           "price": 33.45
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-14",
+          "pointers": [
+            "UMMA recovered this week, gaining +2.19%, but still underperformed its benchmark by 0.40 pts.",
+            "Key holdings like Samsung and SK Hynix saw strong surges, offsetting declines in ASML and Constellation Software.",
+            "RSI improved from 34.9 to 43.4, moving out of oversold territory, but volume was below average."
+          ],
+          "price": 34.59
         }
       ]
     }
   },
-  "updated": "2026-11-13T03:02:41+00:00"
+  "updated": "2026-11-14T02:50:43+00:00"
 }
