@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-11-14T02:46:28+00:00"
+    "last_window_end": "2026-11-16T02:27:06+00:00"
   },
   "picks": [
     {
@@ -520,6 +520,27 @@
       "date": "2026-11-14",
       "price": 128.09,
       "ticker": "WMT"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Nvidia's Q3 earnings report on Tuesday and the growing calls for Jensen Huang to return as CEO following his resignation last week.",
+      "date": "2026-11-16",
+      "price": 162.85,
+      "ticker": "NVDA"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Walmart's Q3 earnings report, expected to be released this week.",
+      "date": "2026-11-16",
+      "price": 128.09,
+      "ticker": "WMT"
+    },
+    {
+      "call": "avoid",
+      "catalyst": "FDA refusal for its lung cancer treatment, ivonescimab.",
+      "date": "2026-11-16",
+      "price": 14.15,
+      "ticker": "SMMT"
     }
   ],
   "portfolio": {
@@ -921,5 +942,5 @@
       ]
     }
   },
-  "updated": "2026-11-14T02:50:43+00:00"
+  "updated": "2026-11-16T02:30:43+00:00"
 }
