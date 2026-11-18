@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-11-17T04:50:37+00:00"
+    "last_window_end": "2026-11-18T03:56:05+00:00"
   },
   "picks": [
     {
@@ -555,6 +555,27 @@
       "date": "2026-11-17",
       "price": 11.82,
       "ticker": "SMMT"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Sellas Life Sciences stock tripled after positive Phase 3 cancer vaccine data on Tue 17 Nov.",
+      "date": "2026-11-18",
+      "price": 19.15,
+      "ticker": "SLS"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Nvidia reported better-than-expected earnings with $115.8B revenue and a strong sales outlook of $126B-$134B on Wed 18 Nov.",
+      "date": "2026-11-18",
+      "price": 155.46,
+      "ticker": "NVDA"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Red Cat Q3 revenue contracted 42%, analysts cut price targets, and the company pulled guidance on Tue 17 Nov.",
+      "date": "2026-11-18",
+      "price": 2.41,
+      "ticker": "RCAT"
     }
   ],
   "portfolio": {
@@ -956,5 +977,5 @@
       ]
     }
   },
-  "updated": "2026-11-17T04:52:20+00:00"
+  "updated": "2026-11-18T03:57:19+00:00"
 }
