@@ -1,29 +1,8 @@
 {
   "market": {
-    "last_window_end": "2026-11-19T03:53:58+00:00"
+    "last_window_end": "2026-11-20T03:46:57+00:00"
   },
   "picks": [
-    {
-      "call": "hold",
-      "catalyst": "Target stock posted Q2 earnings beat and raised 2026 guidance",
-      "date": "2026-10-05",
-      "price": 156.0,
-      "ticker": "TGT"
-    },
-    {
-      "call": "accumulate",
-      "catalyst": "NVDA Stock Looks 'Remarkably Cheap', Says Wall Street After Beat-And-Raise Q1 \u2014 Analyst Sees Nvidia Market Cap Soaring Past $10 Trillion",
-      "date": "2026-10-05",
-      "price": 233.95,
-      "ticker": "NVDA"
-    },
-    {
-      "call": "hold",
-      "catalyst": "B of A upgrades Saia to Buy as Raymond James cuts target",
-      "date": "2026-10-05",
-      "price": 351.12,
-      "ticker": "SAIA"
-    },
     {
       "call": "accumulate",
       "catalyst": "NVIDIA Breaks to $238.90, Setting a New 52-Week High (Tue 06 Oct 00:01 UTC)",
@@ -590,6 +569,27 @@
       "date": "2026-11-19",
       "price": 339.92,
       "ticker": "PANW"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Earnings beat and $4.5 billion AI deal (Thu 19 Nov)",
+      "date": "2026-11-20",
+      "price": 361.73,
+      "ticker": "PANW"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Sanofi reportedly mulls takeover of US drugmaker Insmed (Thu 19 Nov)",
+      "date": "2026-11-20",
+      "price": 144.46,
+      "ticker": "INSM"
+    },
+    {
+      "call": "hold",
+      "catalyst": "SEC Is Probing Nvidia Amid Departure of CEO Jensen Huang (Fri 20 Nov)",
+      "date": "2026-11-20",
+      "price": 145.98,
+      "ticker": "NVDA"
     }
   ],
   "portfolio": {
@@ -991,5 +991,5 @@
       ]
     }
   },
-  "updated": "2026-11-19T03:55:16+00:00"
+  "updated": "2026-11-20T04:14:12+00:00"
 }
