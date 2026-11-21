@@ -1,29 +1,8 @@
 {
   "market": {
-    "last_window_end": "2026-11-20T03:46:57+00:00"
+    "last_window_end": "2026-11-21T03:37:26+00:00"
   },
   "picks": [
-    {
-      "call": "accumulate",
-      "catalyst": "NVIDIA Breaks to $238.90, Setting a New 52-Week High (Tue 06 Oct 00:01 UTC)",
-      "date": "2026-10-06",
-      "price": 238.9,
-      "ticker": "NVDA"
-    },
-    {
-      "call": "accumulate",
-      "catalyst": "Vaxcyte Stock Hits New 52-Week High (Mon 05 Oct 12:55 UTC)",
-      "date": "2026-10-06",
-      "price": 73.82,
-      "ticker": "PCVX"
-    },
-    {
-      "call": "hold",
-      "catalyst": "VEEA Stock Surges On NovaGen Merger And Trollee Deal (Mon 05 Oct 12:32 UTC)",
-      "date": "2026-10-06",
-      "price": 5.72,
-      "ticker": "VEEA"
-    },
     {
       "call": "accumulate",
       "catalyst": "Constellation Energy (CEG) surged 12.25% after unveiling a 20-year power purchase agreement with Google supporting the addition of clean energy.",
@@ -590,6 +569,27 @@
       "date": "2026-11-20",
       "price": 145.98,
       "ticker": "NVDA"
+    },
+    {
+      "call": "hold",
+      "catalyst": "SEC investigation into its accounting practices (Fri 20 Nov)",
+      "date": "2026-11-21",
+      "price": 125.53,
+      "ticker": "NVDA"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Cut in Q1 earnings guidance (Fri 20 Nov)",
+      "date": "2026-11-21",
+      "price": 270.44,
+      "ticker": "INTU"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "TD Cowen upgraded to Buy and raised price target (Fri 20 Nov)",
+      "date": "2026-11-21",
+      "price": 339.85,
+      "ticker": "UNH"
     }
   ],
   "portfolio": {
@@ -671,6 +671,17 @@
             "Strong profitability metrics (ROE 22.3%, profit score 87.0) continue to support the long-term case."
           ],
           "price": 62.12
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-21",
+          "pointers": [
+            "ELS outperformed the broader market this week, showing relative strength in a down market.",
+            "Analyst price targets were raised, indicating continued confidence in future upside.",
+            "Profitability remains strong, supporting the long-term investment case despite valuation concerns."
+          ],
+          "price": 60.99
         }
       ],
       "HLAL": [
@@ -750,6 +761,17 @@
             "Meta Platforms saw significant ETF buying this week, reinforcing its AI commerce thesis."
           ],
           "price": 69.91
+        },
+        {
+          "call": "reduce",
+          "conviction": "medium",
+          "date": "2026-11-21",
+          "pointers": [
+            "HLAL significantly underperformed its benchmark this week, dropping -9.97% vs -8.56% for the benchmark.",
+            "The fund's RSI plunged to 23.4, indicating oversold conditions after a sharp decline across all holdings.",
+            "Key holdings Apple and Meta were highlighted as Soros buys, but both saw significant price drops this week."
+          ],
+          "price": 62.94
         }
       ],
       "LLY": [
@@ -829,6 +851,17 @@
             "Strong weekly outperformance and momentum, but valuation remains a key concern."
           ],
           "price": 1443.5
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-21",
+          "pointers": [
+            "ObesityWeek data on pipeline drugs (EloraTZP, retatrutide, Foundayo) supports long-term growth story.",
+            "Strong GLP-1 sales (Mounjaro, Zepbound) led to a significant 2026 revenue forecast raise.",
+            "Stock pulled back this week (-6.68%), but YTD and 1-year returns remain robust, suggesting profit-taking."
+          ],
+          "price": 1347.11
         }
       ],
       "SPRE": [
@@ -908,6 +941,17 @@
             "Sun Communities had its price target lowered, and Goodman Group's valuation was questioned this week."
           ],
           "price": 19.17
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-21",
+          "pointers": [
+            "SPRE outperformed its benchmark this week, falling -3.81% vs. -8.56% for the benchmark.",
+            "Welltower's bullish signal and Sun Communities' 'Buy' rating offer positive sentiment for holdings.",
+            "Rising bond yields continue to challenge REIT valuations, as highlighted by Equinix's Q3 review."
+          ],
+          "price": 18.44
         }
       ],
       "UMMA": [
@@ -987,9 +1031,20 @@
             "RSI improved from 34.9 to 43.4, moving out of oversold territory, but volume was below average."
           ],
           "price": 34.59
+        },
+        {
+          "call": "reduce",
+          "conviction": "medium",
+          "date": "2026-11-21",
+          "pointers": [
+            "UMMA significantly underperformed its benchmark this week, falling -10.52% vs -8.56%, with heavy selling pressure.",
+            "Key holdings like ASML and Constellation Software saw declines, while positive news for SK Hynix did not prevent the overall drop.",
+            "RSI plunged from 43.4 to 25.7, indicating the fund is now deeply oversold, with volume 1.71x the average."
+          ],
+          "price": 30.95
         }
       ]
     }
   },
-  "updated": "2026-11-20T04:14:12+00:00"
+  "updated": "2026-11-21T03:40:29+00:00"
 }
