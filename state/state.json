@@ -1,43 +1,8 @@
 {
   "market": {
-    "last_window_end": "2026-11-21T03:37:26+00:00"
+    "last_window_end": "2026-11-23T03:19:12+00:00"
   },
   "picks": [
-    {
-      "call": "accumulate",
-      "catalyst": "Constellation Energy (CEG) surged 12.25% after unveiling a 20-year power purchase agreement with Google supporting the addition of clean energy.",
-      "date": "2026-10-07",
-      "price": 300.4,
-      "ticker": "CEG"
-    },
-    {
-      "call": "accumulate",
-      "catalyst": "Penguin Solutions (PENG) gained 5.77% after posting a Q4 beat and raising FY2027 guidance above consensus, expecting net sales of ~$2.43B with EPS of ~$4.45, dr",
-      "date": "2026-10-07",
-      "price": 64.21,
-      "ticker": "PENG"
-    },
-    {
-      "call": "accumulate",
-      "catalyst": "Earnings beat and 2027 outlook raise (Wed 07 Oct)",
-      "date": "2026-10-08",
-      "price": 72.61,
-      "ticker": "PENG"
-    },
-    {
-      "call": "hold",
-      "catalyst": "House Committee Report on China Ties (Wed 07 Oct)",
-      "date": "2026-10-08",
-      "price": 5.89,
-      "ticker": "BULL"
-    },
-    {
-      "call": "hold",
-      "catalyst": "Hiked profit guidance after tariff refunds, but less optimistic sales outlook (Wed 07 Oct)",
-      "date": "2026-10-08",
-      "price": 19.51,
-      "ticker": "LEVI"
-    },
     {
       "call": "hold",
       "catalyst": "Viatris Agrees to Acquire Pacira BioSciences",
@@ -590,6 +555,27 @@
       "date": "2026-11-21",
       "price": 339.85,
       "ticker": "UNH"
+    },
+    {
+      "call": "hold",
+      "catalyst": "SEC Investigation Raises New Concerns Despite Record AI Earnings (Mon 23 Nov 01:36 UTC)",
+      "date": "2026-11-23",
+      "price": 125.53,
+      "ticker": "NVDA"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Zscaler (ZS) Draws Takeover Interest In Reported Acquisition Talks (Sat 21 Nov 07:15 UTC)",
+      "date": "2026-11-23",
+      "price": 194.82,
+      "ticker": "ZS"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Index Ejection And Analyst Downgrade Pile Fresh Pressure On Strategy (NASDAQ: MSTR) After 23% Weekly Collapse (Mon 23 Nov 01:25 UTC)",
+      "date": "2026-11-23",
+      "price": 77.8,
+      "ticker": "MSTR"
     }
   ],
   "portfolio": {
@@ -1046,5 +1032,5 @@
       ]
     }
   },
-  "updated": "2026-11-21T03:40:29+00:00"
+  "updated": "2026-11-23T03:20:42+00:00"
 }
