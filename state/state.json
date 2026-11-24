@@ -1,22 +1,8 @@
 {
   "market": {
-    "last_window_end": "2026-11-23T03:19:12+00:00"
+    "last_window_end": "2026-11-24T06:34:14+00:00"
   },
   "picks": [
-    {
-      "call": "hold",
-      "catalyst": "Viatris Agrees to Acquire Pacira BioSciences",
-      "date": "2026-10-09",
-      "price": 36.39,
-      "ticker": "PCRX"
-    },
-    {
-      "call": "hold",
-      "catalyst": "Upgraded by Citigroup -- Price Target Raised to $285",
-      "date": "2026-10-09",
-      "price": 154.76,
-      "ticker": "TGT"
-    },
     {
       "call": "accumulate",
       "catalyst": "Moderna stock hit a 4-year high on Friday, October 9, due to a planned national cancer vaccine effort.",
@@ -576,6 +562,20 @@
       "date": "2026-11-23",
       "price": 77.8,
       "ticker": "MSTR"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Jensen Huang's reinstatement as CEO, sealed by a personal promise from President Donald Trump that Huang was not a national security threat (Mon 23 Nov)",
+      "date": "2026-11-24",
+      "price": 165.05,
+      "ticker": "NVDA"
+    },
+    {
+      "call": "hold",
+      "catalyst": "CrowdStrike's acquisition of Zscaler in a $43.9 billion all-stock deal (Tue 24 Nov)",
+      "date": "2026-11-24",
+      "price": 229.24,
+      "ticker": "ZS"
     }
   ],
   "portfolio": {
@@ -1032,5 +1032,5 @@
       ]
     }
   },
-  "updated": "2026-11-23T03:20:42+00:00"
+  "updated": "2026-11-24T06:35:40+00:00"
 }
