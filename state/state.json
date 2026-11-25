@@ -1,29 +1,8 @@
 {
   "market": {
-    "last_window_end": "2026-11-24T06:34:14+00:00"
+    "last_window_end": "2026-11-25T05:08:00+00:00"
   },
   "picks": [
-    {
-      "call": "accumulate",
-      "catalyst": "Moderna stock hit a 4-year high on Friday, October 9, due to a planned national cancer vaccine effort.",
-      "date": "2026-10-10",
-      "price": 225.0,
-      "ticker": "MRNA"
-    },
-    {
-      "call": "accumulate",
-      "catalyst": "Humana stock surged on Friday, October 9, after its key Medicare Advantage plan received a higher rating.",
-      "date": "2026-10-10",
-      "price": 431.87,
-      "ticker": "HUM"
-    },
-    {
-      "call": "hold",
-      "catalyst": "VEEA stock surged on Friday, October 9, due to a NovaGen merger and Trollee deal.",
-      "date": "2026-10-10",
-      "price": 5.7,
-      "ticker": "VEEA"
-    },
     {
       "call": "accumulate",
       "catalyst": "Mirum Pharmaceuticals to report Livmarli trial results Monday, October 12",
@@ -576,6 +555,27 @@
       "date": "2026-11-24",
       "price": 229.24,
       "ticker": "ZS"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Sanofi announced a $41 billion deal to acquire Insmed on Tue 24 Nov.",
+      "date": "2026-11-25",
+      "price": 170.15,
+      "ticker": "INSM"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Cogent Biosciences won FDA approval for Ekitna, the first new stomach cancer treatment in over 20 years, on Tue 24 Nov.",
+      "date": "2026-11-25",
+      "price": 33.01,
+      "ticker": "COGT"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Abercrombie & Fitch shares jumped after earnings beat estimates and the outlook rose on Tue 24 Nov.",
+      "date": "2026-11-25",
+      "price": 168.1,
+      "ticker": "ANF"
     }
   ],
   "portfolio": {
@@ -1032,5 +1032,5 @@
       ]
     }
   },
-  "updated": "2026-11-24T06:35:40+00:00"
+  "updated": "2026-11-25T05:10:07+00:00"
 }
