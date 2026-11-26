@@ -1,6 +1,6 @@
 {
   "market": {
-    "last_window_end": "2026-11-25T05:08:00+00:00"
+    "last_window_end": "2026-11-26T04:34:36+00:00"
   },
   "picks": [
     {
@@ -576,6 +576,27 @@
       "date": "2026-11-25",
       "price": 168.1,
       "ticker": "ANF"
+    },
+    {
+      "call": "hold",
+      "catalyst": "S&P Global warned a possible one\u2011notch credit rating cut over rising management and governance risk (26\u202fNov)",
+      "date": "2026-11-26",
+      "price": 149.3,
+      "ticker": "NVDA"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Deere stock defied weak earnings guidance and traded higher on earnings day (25\u202fNov)",
+      "date": "2026-11-26",
+      "price": 641.02,
+      "ticker": "DE"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Sanofi announced a $41\u202fbillion acquisition of Insmed, the largest deal in two decades (25\u202fNov)",
+      "date": "2026-11-26",
+      "price": 170.31,
+      "ticker": "INSM"
     }
   ],
   "portfolio": {
@@ -1032,5 +1053,5 @@
       ]
     }
   },
-  "updated": "2026-11-25T05:10:07+00:00"
+  "updated": "2026-11-26T04:36:58+00:00"
 }
