@@ -1,22 +1,8 @@
 {
   "market": {
-    "last_window_end": "2026-11-26T04:34:36+00:00"
+    "last_window_end": "2026-11-27T04:38:36+00:00"
   },
   "picks": [
-    {
-      "call": "accumulate",
-      "catalyst": "Mirum Pharmaceuticals to report Livmarli trial results Monday, October 12",
-      "date": "2026-10-12",
-      "price": 86.01,
-      "ticker": "MIRM"
-    },
-    {
-      "call": "hold",
-      "catalyst": "NBIS says switch to Bloom 'Significantly Enhanced' New Jersey AI Data Center Project",
-      "date": "2026-10-12",
-      "price": 2.91,
-      "ticker": "DAIO"
-    },
     {
       "call": "hold",
       "catalyst": "Starbucks says not buying Chipotle, ends takeover speculation (Mon 12 Oct 20:25 UTC)",
@@ -597,6 +583,20 @@
       "date": "2026-11-26",
       "price": 170.31,
       "ticker": "INSM"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Dell Technologies raises fiscal 2027 guidance after record revenue (Fri 27 Nov 00:12 UTC)",
+      "date": "2026-11-27",
+      "price": 297.06,
+      "ticker": "DELL"
+    },
+    {
+      "call": "accumulate",
+      "catalyst": "Nutanix falls 15.3% after an earnings beat, and the timing cannot separate the CEO news from the outlook (Thu 26 Nov 15:29 UTC)",
+      "date": "2026-11-27",
+      "price": 46.3,
+      "ticker": "NTNX"
     }
   ],
   "portfolio": {
@@ -1053,5 +1053,5 @@
       ]
     }
   },
-  "updated": "2026-11-26T04:36:58+00:00"
+  "updated": "2026-11-27T04:40:22+00:00"
 }
