@@ -1,22 +1,8 @@
 {
   "market": {
-    "last_window_end": "2026-11-27T04:38:36+00:00"
+    "last_window_end": "2026-11-28T04:23:16+00:00"
   },
   "picks": [
-    {
-      "call": "hold",
-      "catalyst": "Starbucks says not buying Chipotle, ends takeover speculation (Mon 12 Oct 20:25 UTC)",
-      "date": "2026-10-13",
-      "price": 92.285,
-      "ticker": "SBUX"
-    },
-    {
-      "call": "hold",
-      "catalyst": "IonQ To Buy Elisity In $1.3 Billion Deal Amid Quantum Acquisition Spree (Mon 12 Oct 16:32 UTC)",
-      "date": "2026-10-13",
-      "price": 36.27,
-      "ticker": "IONQ"
-    },
     {
       "call": "accumulate",
       "catalyst": "UnitedHealth Group (UNH) topped Q3 estimates and hiked its 2026 profit outlook to at least $20.50 per share on Tue 13 Oct",
@@ -597,22 +583,32 @@
       "date": "2026-11-27",
       "price": 46.3,
       "ticker": "NTNX"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Analyst calls of the week (Fri 27 Nov 18:15 UTC)",
+      "date": "2026-11-28",
+      "price": 400.0,
+      "ticker": "TSLA"
+    },
+    {
+      "call": "hold",
+      "catalyst": "CrowdStrike: The $44B Zscaler Merger Unlocks An Agentic AI Powerhouse (Fri 27 Nov 15:47 UTC)",
+      "date": "2026-11-28",
+      "price": 217.2,
+      "ticker": "CRWD"
+    },
+    {
+      "call": "hold",
+      "catalyst": "Apple (AAPL) Stock Hits New 52-Week High (Sat 28 Nov 00:00 UTC)",
+      "date": "2026-11-28",
+      "price": 358.54,
+      "ticker": "AAPL"
     }
   ],
   "portfolio": {
     "verdicts": {
       "ELS": [
-        {
-          "call": "reduce",
-          "conviction": "medium",
-          "date": "2026-10-05",
-          "pointers": [
-            "Mizuho downgrade to Neutral adds to negative sentiment, despite strong NOI growth reported this week.",
-            "Stock hit new 52-week lows, indicating continued market pressure and lack of clear support.",
-            "Valuation remains stretched with a high PEG ratio, making it vulnerable in a rising rate environment."
-          ],
-          "price": 58.25
-        },
         {
           "call": "hold",
           "conviction": "low",
@@ -689,20 +685,20 @@
             "Profitability remains strong, supporting the long-term investment case despite valuation concerns."
           ],
           "price": 60.99
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-28",
+          "pointers": [
+            "Strong weekly outperformance (+4.68% vs benchmark +1.74%) shows market confidence.",
+            "Significant institutional selling by State Street Corp raises concerns about future demand.",
+            "Valuation remains stretched with high PEG and negative earnings growth, limiting upside."
+          ],
+          "price": 63.53
         }
       ],
       "HLAL": [
-        {
-          "call": "accumulate",
-          "conviction": "medium",
-          "date": "2026-10-05",
-          "pointers": [
-            "HLAL outperformed its benchmark this week, continuing a positive trend over the last four weeks.",
-            "AI-related news, including Nvidia and Microsoft, suggests continued strength in key holdings.",
-            "The ETF is at its 52-week high, indicating strong momentum and investor confidence."
-          ],
-          "price": 75.6
-        },
         {
           "call": "hold",
           "conviction": "medium",
@@ -779,20 +775,20 @@
             "Key holdings Apple and Meta were highlighted as Soros buys, but both saw significant price drops this week."
           ],
           "price": 62.94
+        },
+        {
+          "call": "hold",
+          "conviction": "medium",
+          "date": "2026-11-28",
+          "pointers": [
+            "HLAL recovered +1.07% this week, outperforming its prior 4-week trend, and RSI rebounded from oversold levels.",
+            "Key holding Apple continues strong FCF generation, contrasting with other 'Magnificent Seven' AI spending.",
+            "Alphabet's Q4 search revenue is tracking below consensus, and Broadcom chip orders were trimmed, impacting sentiment."
+          ],
+          "price": 66.9
         }
       ],
       "LLY": [
-        {
-          "call": "accumulate",
-          "conviction": "medium",
-          "date": "2026-10-05",
-          "pointers": [
-            "Strong Q2 2026 sales for Mounjaro and Zepbound confirm continued dominance in obesity/diabetes market.",
-            "New oral GLP-1 drug Foundayo shows promising early adoption and positive late-stage diabetes study results.",
-            "Despite recent price dip, fundamentals remain robust with high growth and profitability scores."
-          ],
-          "price": 1142.85
-        },
         {
           "call": "accumulate",
           "conviction": "medium",
@@ -869,20 +865,20 @@
             "Stock pulled back this week (-6.68%), but YTD and 1-year returns remain robust, suggesting profit-taking."
           ],
           "price": 1347.11
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-11-28",
+          "pointers": [
+            "LLY's buying spree continues, signaling strategic growth beyond its core GLP-1 drugs.",
+            "Mental health clinical trials market growth offers a new avenue for pipeline expansion.",
+            "Despite pricing pressure on key drugs, strong volume growth continues to drive revenue."
+          ],
+          "price": 1392.38
         }
       ],
       "SPRE": [
-        {
-          "call": "reduce",
-          "conviction": "high",
-          "date": "2026-10-05",
-          "pointers": [
-            "SPRE significantly underperformed its benchmark this week, extending a four-week losing streak.",
-            "The fund's RSI has plummeted to an extremely oversold 13.0, indicating strong selling pressure.",
-            "Key holdings like Goodman and EastGroup Properties faced negative news, including a price target cut for EGP."
-          ],
-          "price": 18.67
-        },
         {
           "call": "reduce",
           "conviction": "high",
@@ -959,20 +955,20 @@
             "Rising bond yields continue to challenge REIT valuations, as highlighted by Equinix's Q3 review."
           ],
           "price": 18.44
-        }
-      ],
-      "UMMA": [
+        },
         {
           "call": "accumulate",
           "conviction": "medium",
-          "date": "2026-10-05",
+          "date": "2026-11-28",
           "pointers": [
-            "UMMA significantly outperformed its benchmark this week, gaining +1.74% against the benchmark's -0.22%.",
-            "Key holdings like ASML saw strong gains (+3.24% Tue), contributing to the ETF's positive momentum.",
-            "The ETF's RSI increased to 56.9, and volume was 1.04x the 20-day average, indicating growing interest."
+            "SPRE outperformed its benchmark this week (+0.52 pts), with a strong +2.26% gain, reversing recent negative trends.",
+            "RSI improved from 39.5 to 52.2, indicating a potential shift in momentum and reduced oversold conditions.",
+            "Goodman Industrial Trust's constitution amendment and positive sentiment around Welltower and Sun Communities are supportive."
           ],
-          "price": 37.77
-        },
+          "price": 18.97
+        }
+      ],
+      "UMMA": [
         {
           "call": "reduce",
           "conviction": "medium",
@@ -1049,9 +1045,20 @@
             "RSI plunged from 43.4 to 25.7, indicating the fund is now deeply oversold, with volume 1.71x the average."
           ],
           "price": 30.95
+        },
+        {
+          "call": "accumulate",
+          "conviction": "medium",
+          "date": "2026-11-28",
+          "pointers": [
+            "UMMA rebounded +1.48% this week, recovering from being oversold, with RSI moving from 31.5 to 42.8.",
+            "Key tech holdings like Samsung and SK Hynix saw positive news, contributing to the fund's recovery.",
+            "Despite some investor selling in Taiwan Semiconductor, strong demand for AI chips from Nvidia and ASML remains a tailwind."
+          ],
+          "price": 32.9
         }
       ]
     }
   },
-  "updated": "2026-11-27T04:40:22+00:00"
+  "updated": "2026-11-28T04:26:36+00:00"
 }
